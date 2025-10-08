@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.egg-info/
+*.eggs/
+dist/
+build/
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# Environment variables
+*.env
+.env.*
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Logs
+*.log
+*.log.*
+*.out
+
+# Byte-compiled and cache files
+*.pickle
+*.db
+*.sqlite3
+*.h5
+
+# IDEs
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Deep learning & ML
+__pycache__/
+*.h5
+*.ckpt
+*.pb
+*.tflite
+*.pt
+*.pth
+*.joblib
+*.npy
+*.npz
+
+# React frontend
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.next/
+frontend/.cache/
+
+# Docker
+*.pid
+*.sock
+
+# Test & coverage files
+htmlcov/
+.coverage
+.cache/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.tox/
+*.mocha
+
+# Editor swap/backup files
+*~
+*.swp
+*.bak
+*.tmp
+
+# Ignore local Docker config overrides
+docker-compose.override.yml

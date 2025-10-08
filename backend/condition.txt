@@ -1,0 +1,17 @@
+use python 3.11 or python 3.10
+
+if browser and whisper takes time
+
+Option B: Use Faster Whisper
+bashpip uninstall openai-whisper
+pip install faster-whisper
+Then modify audio_analyzer.py:
+pythonfrom faster_whisper import WhisperModel
+
+# In __init__:
+self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+
+# In _transcribe_with_whisper:
+segments, info = self.whisper_model.transcribe(temp_path, language="en")
+transcript = " ".join([segment.text for segment in segments])
+
