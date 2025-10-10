@@ -604,7 +604,7 @@ MIT License - see LICENSE file for details
 
 ## 👨‍💻 Authors
 
-- **Your Name** - *Initial work*
+- **Rajvardhan Deshmukh** - 
 
 ---
 
@@ -615,5 +615,6 @@ MIT License - see LICENSE file for details
 - **OpenAI** for Whisper model
 - **FastAPI** for excellent web framework
 - **React** community for amazing tools
+
 
 ---
