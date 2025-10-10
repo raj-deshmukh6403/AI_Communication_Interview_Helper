@@ -95,7 +95,7 @@ const CreateSession = () => {
     }
     };
 
-    console.log('Current form state:', formData);
+    //console.log('Current form state:', formData);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
