@@ -1,12 +1,7 @@
-// ========================================
-// src/pages/Login.jsx
-// ========================================
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext';
 import LoginForm from '../components/auth/LoginForm';
-
-
 
 const Login = () => {
   const navigate = useNavigate();
@@ -24,3 +19,5 @@ const Login = () => {
     </div>
   );
 };
+
+export default Login;
