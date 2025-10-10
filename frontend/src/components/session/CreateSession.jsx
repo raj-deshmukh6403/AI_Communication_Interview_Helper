@@ -69,32 +69,33 @@ const CreateSession = () => {
     const validation = validateSessionForm(formData);
 
     if (!validation.valid) {
-      setErrors(validation.errors);
-      return;
+        setErrors(validation.errors);
+        return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Create session
-      const response = await sessionService.createSession(
-        {
-          position: formData.position,
-          companyName: formData.companyName,
-          jobDescription: formData.jobDescription,
-        },
-        formData.resume
-      );
+        // 🔥 FIX: Log to verify data is present
+        console.log('Form data before sending:', formData);
 
-      // Navigate to interview page
-      navigate(`/interview/${response.id}`);
+        // Create session with correct field mapping
+        const response = await sessionService.createSession(
+        formData,  // ← Just pass the whole formData object
+        formData.resume
+        );
+
+        // Navigate to interview page
+        navigate(`/interview/${response.id}`);
     } catch (err) {
-      console.error('Error creating session:', err);
-      setApiError(getErrorMessage(err));
+        console.error('Error creating session:', err);
+        setApiError(getErrorMessage(err));
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
-  };
+    };
+
+    console.log('Current form state:', formData);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">

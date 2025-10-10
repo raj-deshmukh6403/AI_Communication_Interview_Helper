@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File,Form, status
 from typing import List, Optional
 from ..database import get_database
 from ..models.session import SessionModel, InterviewResponse
@@ -11,6 +11,7 @@ from ..schemas.session import (
 from ..routers.auth import get_current_user
 from ..services.llm_service import LLMService
 import PyPDF2
+import json
 import docx
 import io
 from bson import ObjectId
@@ -20,35 +21,59 @@ router = APIRouter(prefix="/sessions", tags=["Interview Sessions"])
 
 @router.post("/create", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
-    session: SessionCreate,
+    session: str = Form(...),  # CHANGED
     resume: Optional[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Create a new interview session.
     
-    - Accepts job description and position
+    - Accepts job description and position as JSON string in 'session' field
     - Optionally accepts resume file (PDF or DOCX)
     - Extracts text from resume for AI context
     - Creates session in database
     """
     db = get_database()
     
+    # NEW: Parse the JSON string
+    try:
+        session_data = json.loads(session)
+        session_create = SessionCreate(**session_data)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON in session field"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid session data: {str(e)}"
+        )
+    
     # Process resume if uploaded
-    resume_text = session.resume_text
+    resume_text = session_create.resume_text or ""  # CHANGED
     
     if resume:
-        # Read file content
         file_content = await resume.read()
         
-        # Extract text based on file type
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB
+         raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 5MB."
+        )
+        
         if resume.filename.endswith('.pdf'):
             try:
                 pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
                 resume_text = ""
                 for page in pdf_reader.pages:
                     resume_text += page.extract_text() + "\n"
+                    
+                # 👇 ADD THIS DEBUG LOG 👇
+                print(f"✅ Extracted {len(resume_text)} characters from PDF")
+                print(f"📄 First 200 chars: {resume_text[:200]}")    
             except Exception as e:
+                print(f"❌ PDF parsing error: {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Error reading PDF: {str(e)}"
@@ -72,16 +97,14 @@ async def create_session(
     # Create session model
     session_model = SessionModel(
         user_id=str(current_user["_id"]),
-        job_description=session.job_description,
-        company_name=session.company_name,
-        position=session.position,
+        job_description=session_create.job_description,  # CHANGED
+        company_name=session_create.company_name or "",  # CHANGED
+        position=session_create.position,  # CHANGED
         status="pending"
     )
     
     # Insert into database
-    #result = await db.sessions.insert_one(session_model.dict(by_alias=True))
     result = await db.sessions.insert_one(session_model.model_dump(by_alias=True))
-
     session_id = str(result.inserted_id)
     
     # Update user's session count
@@ -109,9 +132,9 @@ async def create_session(
     llm_service = LLMService()
     try:
         questions = await llm_service.generate_interview_questions(
-            job_description=session.job_description,
+            job_description=session_create.job_description,  # CHANGED
             resume_text=resume_text or current_user.get("resume_text"),
-            position=session.position
+            position=session_create.position  # CHANGED
         )
         
         # Store generated questions in session
@@ -121,14 +144,13 @@ async def create_session(
         )
     except Exception as e:
         print(f"Warning: Could not generate questions: {e}")
-        # Continue without questions - they can be generated in real-time
     
     return SessionResponse(
         id=session_id,
         user_id=str(current_user["_id"]),
-        job_description=session.job_description,
-        company_name=session.company_name,
-        position=session.position,
+        job_description=session_create.job_description,  # CHANGED
+        company_name=session_create.company_name or "",  # CHANGED
+        position=session_create.position,  # CHANGED
         session_date=session_model.session_date,
         status="pending",
         overall_score=None,

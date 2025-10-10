@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 43200  # 30 days default
     
     # LLM API
-    groq_api_key: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
     
     # Server
     host: str = "0.0.0.0"

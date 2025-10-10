@@ -10,7 +10,11 @@ class LLMService:
     """
     
     def __init__(self):
-        self.client = Groq(api_key=settings.groq_api_key) if settings.groq_api_key else None
+        try:
+          self.client = Groq(api_key=settings.GROQ_API_KEY) if settings.GROQ_API_KEY else None
+        except Exception as e:
+            print(f"Error initializing Groq client: {e}")
+            self.client = None
         self.model = "llama-3.1-70b-versatile"  # Free model
     
     async def generate_interview_questions(

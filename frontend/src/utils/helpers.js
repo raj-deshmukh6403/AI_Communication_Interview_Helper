@@ -259,14 +259,32 @@ export const safeJSONParse = (str, fallback = null) => {
 };
 
 /**
- * Get error message from error object
+ * Get a human-readable error message from various error object formats
  */
 export const getErrorMessage = (error) => {
   if (typeof error === 'string') return error;
-  if (error?.response?.data?.detail) return error.response.data.detail;
+
+  // Handle backend validation errors (list of objects with msg)
+  const detail = error?.response?.data?.detail;
+
+  if (Array.isArray(detail)) {
+    return detail.map((err) => err?.msg || 'Unknown error').join(', ');
+  }
+
+  if (typeof detail === 'object' && detail?.msg) {
+    return detail.msg;
+  }
+
+  if (typeof detail === 'string') {
+    return detail;
+  }
+
+  // Fallback to error.message if available
   if (error?.message) return error.message;
+
   return 'An unexpected error occurred';
 };
+
 
 /**
  * Format number with commas
