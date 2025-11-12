@@ -53,6 +53,17 @@ const InterviewSession = ({ sessionId }) => {
     getFullTranscript,
   } = useSpeechRecognition();
 
+  // --- added helper: wait for the videoRef to be mounted before requesting permissions ---
+  const waitForVideoRef = async (timeout = 3000) => {
+    const start = Date.now();
+    while (!videoRef.current && Date.now() - start < timeout) {
+      // small pause, waiting for the video element to mount
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return !!videoRef.current;
+  };
+
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -81,10 +92,35 @@ const InterviewSession = ({ sessionId }) => {
       try {
         setError(null);
         console.log('🚀 Starting initialization...');
+
+        // Wait for video element to mount so we can attach stream immediately
+        const ready = await waitForVideoRef(3000);
+        if (!ready) {
+          console.warn('⚠️ videoRef not ready after wait — proceeding but stream attach will be attempted in hook');
+        } else {
+          console.log('✅ videoRef ready - proceeding to request permissions');
+        }
+
+        const mediaStream = await requestPermissions();
+        console.log('✅ Media permissions granted (InterviewSession)', mediaStream);
         
-        await requestPermissions();
-        console.log('✅ Media permissions granted');
-        
+        // SAFETY: attach stream directly to the component video element if available
+        if (mediaStream && videoRef && videoRef.current) {
+          try {
+            console.log('🔗 Attaching returned MediaStream to videoRef in InterviewSession...');
+            const v = videoRef.current;
+            v.muted = true;
+            v.playsInline = true;
+            v.autoplay = true;
+            v.srcObject = mediaStream;
+            v.play().then(() => console.log('✅ Interview video play() succeeded')).catch(err => {
+              console.warn('⚠️ Interview video play() blocked or failed:', err && err.message ? err.message : err);
+            });
+          } catch (attachErr) {
+            console.warn('⚠️ Failed to attach stream to videoRef in InterviewSession:', attachErr);
+          }
+        }
+
         await new Promise(resolve => setTimeout(resolve, 500));
         
         await connect();
@@ -303,10 +339,13 @@ const InterviewSession = ({ sessionId }) => {
       if (isSpeechSupported) {
         setTimeout(() => {
           try {
-            console.log('🎤 Starting speech recognition...');
-            startListening((finalTranscript) => {
+            console.log('🎤 Attempting to start speech recognition...');
+            const startedSpeech = startListening((finalTranscript) => {
               console.log('📝 Speech final:', finalTranscript);
             });
+            if (!startedSpeech) {
+              console.warn('⚠️ startListening returned false — speech recognition did not start');
+            }
           } catch (error) {
             console.warn('⚠️ Speech start failed:', error);
           }

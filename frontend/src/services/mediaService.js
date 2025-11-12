@@ -7,22 +7,45 @@ class MediaService {
     this.audioTrack = null;
     this.mediaRecorder = null;
     this.audioChunks = [];
+  
+
+  // Expose instance for debugging from the console: window.__mediaService
+    try {
+      // set on window when possible so you can inspect in browser console
+      // Example: window.__mediaService.getStream()
+      if (typeof window !== 'undefined') {
+        window.__mediaService = this;
+      }
+    } catch (e) {
+      // ignore in non-browser environments
+    }
   }
 
-  /**
-   * 🔥 FIX: Set stream (called from useMediaRecorder)
+   /**
+   * Set stream (called from useMediaRecorder)
    */
   setStream(stream) {
     this.stream = stream;
     if (stream) {
-      this.videoTrack = stream.getVideoTracks()[0];
-      this.audioTrack = stream.getAudioTracks()[0];
-      console.log('✅ MediaService: Stream set', { 
-        hasVideo: !!this.videoTrack, 
-        hasAudio: !!this.audioTrack 
+      this.videoTrack = stream.getVideoTracks()[0] || null;
+      this.audioTrack = stream.getAudioTracks()[0] || null;
+      console.log('✅ MediaService: Stream set', {
+        hasVideo: !!this.videoTrack,
+        hasAudio: !!this.audioTrack,
+        videoTracks: stream.getVideoTracks().map(t => ({ id: t.id, enabled: t.enabled })),
+        audioTracks: stream.getAudioTracks().map(t => ({ id: t.id, enabled: t.enabled })),
       });
+    } else {
+      this.videoTrack = null;
+      this.audioTrack = null;
     }
+
+    // keep window.__mediaService pointing to this instance
+    try {
+      if (typeof window !== 'undefined') window.__mediaService = this;
+    } catch (e) { /* ignore */ }
   }
+
 
   /**
    * Request camera and microphone permissions

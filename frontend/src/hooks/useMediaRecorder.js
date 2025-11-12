@@ -17,57 +17,128 @@ const useMediaRecorder = () => {
   const audioCallbackRef = useRef(null);
   const streamRef = useRef(null);
 
+  // Guard so we don't call getUserMedia concurrently
+  const isRequestingRef = useRef(false);
+
   /**
-   * Request camera and microphone permissions
+   * Utility sleep
+   */
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+  /**
+   * Request camera and microphone permissions with retries and fallback constraints
    */
   const requestPermissions = useCallback(async () => {
-    try {
-      setError(null);
-      console.log('🎥 Requesting media permissions...');
-      
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-      
-      console.log('✅ Media stream obtained:', mediaStream);
-      console.log('📹 Video tracks:', mediaStream.getVideoTracks());
-      console.log('🎤 Audio tracks:', mediaStream.getAudioTracks());
-      
-      streamRef.current = mediaStream;
-      setStream(mediaStream);
-      setHasPermissions(true);
-      
-      // Pass stream to mediaService
-      mediaService.setStream(mediaStream);
-      
-      return mediaStream;
-    } catch (err) {
-      console.error('❌ Error accessing media devices:', err);
-      let errorMessage = 'Could not access camera/microphone. ';
-      
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMessage += 'Please allow camera and microphone permissions in your browser settings.';
-      } else if (err.name === 'NotFoundError') {
-        errorMessage += 'No camera or microphone found on your device.';
-      } else if (err.name === 'NotReadableError') {
-        errorMessage += 'Camera/microphone is already in use by another application.';
-      } else {
-        errorMessage += err.message;
-      }
-      
-      setError(errorMessage);
-      setHasPermissions(false);
-      throw err;
+    // Prevent concurrent calls
+    if (isRequestingRef.current) {
+      console.log('🎥 requestPermissions already in progress - returning existing state');
+      // If a stream is already set, just return it
+      if (streamRef.current) return streamRef.current;
+      // otherwise wait briefly and proceed to attempt
+      await sleep(200);
     }
+
+    isRequestingRef.current = true;
+    setError(null);
+
+    const preferredConstraints = {
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user',
+        frameRate: { ideal: 30 },
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }
+    };
+
+    const fallbackConstraints = {
+      video: true,
+      audio: true,
+    };
+
+    const maxAttempts = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        console.log(`🎥 Requesting media permissions (attempt ${attempt}/${maxAttempts})...`);
+        const constraints = attempt === 1 ? preferredConstraints : fallbackConstraints;
+
+        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        console.log('✅ Media stream obtained:', mediaStream);
+        console.log('📹 Video tracks:', mediaStream.getVideoTracks());
+        console.log('🎤 Audio tracks:', mediaStream.getAudioTracks());
+
+        streamRef.current = mediaStream;
+        setStream(mediaStream);
+        setHasPermissions(true);
+        
+        // Pass stream to mediaService
+        try {
+          mediaService.setStream(mediaStream);
+        } catch (e) {
+          console.warn('⚠️ mediaService.setStream failed:', e);
+        }
+
+        isRequestingRef.current = false;
+        return mediaStream;
+      } catch (err) {
+        lastError = err;
+        console.error(`❌ Error accessing media devices (attempt ${attempt}):`, err);
+
+        // If it's an abort/time-out or device busy, wait and retry with fallback constraints
+        const retryable = (
+          err?.name === 'AbortError' ||
+          err?.name === 'NotReadableError' ||
+          err?.name === 'TrackStartError' ||
+          err?.name === 'OverconstrainedError' ||
+          err?.name === 'NotAllowedError' // permission denied - not really retryable but we'll surface
+        );
+
+        // If permission explicitly denied, break immediately (do not retry)
+        if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+          setError('Please allow camera and microphone permissions in your browser settings.');
+          isRequestingRef.current = false;
+          setHasPermissions(false);
+          throw err;
+        }
+
+        // If not retryable (unknown), break
+        if (!retryable) {
+          console.warn('🔴 Non-retryable error when requesting media:', err);
+          isRequestingRef.current = false;
+          setHasPermissions(false);
+          throw err;
+        }
+
+        // If this was the last attempt, throw
+        if (attempt === maxAttempts) {
+          isRequestingRef.current = false;
+          setHasPermissions(false);
+          const msg = err?.message || 'Could not access camera/microphone. Please try again.';
+          setError(msg);
+          throw err;
+        }
+
+        // Wait a bit before retrying to allow device to become available
+        const backoffMs = attempt === 1 ? 600 : 1000;
+        console.log(`⏳ Waiting ${backoffMs}ms before retrying getUserMedia...`);
+        await sleep(backoffMs);
+        // continue loop - next attempts will use fallback constraints
+      }
+    }
+
+    // If we reached here, we failed
+    isRequestingRef.current = false;
+    setHasPermissions(false);
+    const finalMsg = lastError ? (lastError.message || String(lastError)) : 'Unknown error';
+    setError(finalMsg);
+    throw lastError || new Error('Failed to get media');
   }, []);
 
   /**
@@ -90,7 +161,7 @@ const useMediaRecorder = () => {
         if (video.paused) {
           video.play()
             .then(() => console.log('✅ Video playing'))
-            .catch(err => console.warn('⚠️ Play blocked:', err.message));
+            .catch(err => console.warn('⚠️ Play blocked:', err && err.message ? err.message : err));
         }
       };
       
@@ -257,6 +328,13 @@ const useMediaRecorder = () => {
           track.stop();
           console.log(`⏹️ Stopped track: ${track.kind}`);
         });
+        streamRef.current = null;
+      }
+      // remove video srcObject to release resource
+      if (videoRef.current) {
+        try {
+          videoRef.current.srcObject = null;
+        } catch (e) {}
       }
     };
   }, [stopRecording]);
