@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import mediaService from '../services/mediaService';
 
 /**
- * Custom hook for media recording (camera and microphone)
+ * FIXED: Custom hook for media recording (camera and microphone)
  */
 const useMediaRecorder = () => {
   const [stream, setStream] = useState(null);
@@ -15,6 +15,7 @@ const useMediaRecorder = () => {
   const videoRef = useRef(null);
   const frameIntervalRef = useRef(null);
   const audioCallbackRef = useRef(null);
+  const streamRef = useRef(null);
 
   /**
    * Request camera and microphone permissions
@@ -22,67 +23,113 @@ const useMediaRecorder = () => {
   const requestPermissions = useCallback(async () => {
     try {
       setError(null);
-      const mediaStream = await mediaService.requestPermissions();
+      console.log('🎥 Requesting media permissions...');
+      
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      console.log('✅ Media stream obtained:', mediaStream);
+      console.log('📹 Video tracks:', mediaStream.getVideoTracks());
+      console.log('🎤 Audio tracks:', mediaStream.getAudioTracks());
+      
+      streamRef.current = mediaStream;
       setStream(mediaStream);
       setHasPermissions(true);
       
-      // Attach stream to video element if ref exists
-      if (videoRef.current) {
-        console.log('Setting video srcObject...');
-        videoRef.current.srcObject = mediaStream;
-        
-        // Ensure video plays - wait for metadata
-        const video = videoRef.current;
-        const playVideo = () => {
-          video.play()
-            .then(() => {
-              console.log('Video started playing');
-            })
-            .catch(err => {
-              console.error('Video autoplay prevented:', err);
-              // Try again after user interaction or delay
-              setTimeout(() => {
-                if (videoRef.current) {
-                  videoRef.current.play().catch(e => {
-                    console.error('Retry video play failed:', e);
-                  });
-                }
-              }, 500);
-            });
-        };
-        
-        // Wait for video to be ready
-        if (video.readyState >= 2) {
-          playVideo();
-        } else {
-          video.addEventListener('loadedmetadata', playVideo, { once: true });
-          video.addEventListener('canplay', playVideo, { once: true });
-        }
-      }
+      // Pass stream to mediaService
+      mediaService.setStream(mediaStream);
       
       return mediaStream;
     } catch (err) {
-      setError(err.message);
+      console.error('❌ Error accessing media devices:', err);
+      let errorMessage = 'Could not access camera/microphone. ';
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMessage += 'Please allow camera and microphone permissions in your browser settings.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage += 'No camera or microphone found on your device.';
+      } else if (err.name === 'NotReadableError') {
+        errorMessage += 'Camera/microphone is already in use by another application.';
+      } else {
+        errorMessage += err.message;
+      }
+      
+      setError(errorMessage);
       setHasPermissions(false);
       throw err;
     }
   }, []);
 
   /**
+   * 🔥 FIX: Attach stream to video element and force play
+   */
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      console.log('🔗 Attaching stream to video element...');
+      
+      const video = videoRef.current;
+      video.srcObject = stream;
+      
+      // Force attributes
+      video.muted = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      
+      // Aggressive play attempts
+      const tryPlay = () => {
+        if (video.paused) {
+          video.play()
+            .then(() => console.log('✅ Video playing'))
+            .catch(err => console.warn('⚠️ Play blocked:', err.message));
+        }
+      };
+      
+      // Try multiple times
+      setTimeout(tryPlay, 100);
+      setTimeout(tryPlay, 500);
+      setTimeout(tryPlay, 1000);
+      
+      // Event listeners
+      video.addEventListener('loadedmetadata', tryPlay);
+      video.addEventListener('canplay', tryPlay);
+      
+      return () => {
+        video.removeEventListener('loadedmetadata', tryPlay);
+        video.removeEventListener('canplay', tryPlay);
+      };
+    }
+  }, [stream]);
+
+  /**
    * Start recording video and audio
    */
   const startRecording = useCallback((onVideoFrame, onAudioChunk, fps = 2) => {
-    if (!stream) {
+    console.log('🎬 Starting recording...');
+    
+    if (!streamRef.current) {
+      console.error('❌ No stream available');
       setError('Media stream not initialized');
       return false;
     }
 
     try {
       setIsRecording(true);
+      console.log('✅ Recording started');
       
       // Start capturing video frames
       if (onVideoFrame) {
-        const frameInterval = 1000 / fps; // Convert FPS to milliseconds
+        const frameInterval = 1000 / fps;
+        console.log(`📸 Capturing frames every ${frameInterval}ms (${fps} FPS)`);
         
         frameIntervalRef.current = setInterval(() => {
           if (videoRef.current && isCameraEnabled) {
@@ -96,55 +143,74 @@ const useMediaRecorder = () => {
       
       // Start recording audio
       if (onAudioChunk) {
+        console.log('🎤 Starting audio recording...');
         audioCallbackRef.current = onAudioChunk;
         mediaService.startAudioRecording(onAudioChunk);
       }
       
       return true;
     } catch (err) {
+      console.error('❌ Error starting recording:', err);
       setError(err.message);
       setIsRecording(false);
       return false;
     }
-  }, [stream, isCameraEnabled]);
+  }, [isCameraEnabled]);
 
   /**
    * Stop recording
    */
   const stopRecording = useCallback(() => {
-    // Stop video frame capture
+    console.log('⏹️ Stopping recording...');
+    
     if (frameIntervalRef.current) {
       clearInterval(frameIntervalRef.current);
       frameIntervalRef.current = null;
     }
     
-    // Stop audio recording
     mediaService.stopAudioRecording();
     audioCallbackRef.current = null;
     
     setIsRecording(false);
+    console.log('✅ Recording stopped');
   }, []);
 
   /**
    * Toggle camera on/off
    */
   const toggleCamera = useCallback((enabled) => {
-    const success = mediaService.toggleCamera(enabled);
-    if (success) {
-      setIsCameraEnabled(enabled);
+    console.log(`📹 Toggle camera: ${enabled}`);
+    
+    if (streamRef.current) {
+      const videoTrack = streamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = enabled;
+        setIsCameraEnabled(enabled);
+        console.log(`✅ Camera ${enabled ? 'enabled' : 'disabled'}`);
+        return true;
+      }
     }
-    return success;
+    console.warn('⚠️ No video track found');
+    return false;
   }, []);
 
   /**
    * Toggle microphone on/off
    */
   const toggleMicrophone = useCallback((enabled) => {
-    const success = mediaService.toggleMicrophone(enabled);
-    if (success) {
-      setIsMicEnabled(enabled);
+    console.log(`🎤 Toggle microphone: ${enabled}`);
+    
+    if (streamRef.current) {
+      const audioTrack = streamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = enabled;
+        setIsMicEnabled(enabled);
+        console.log(`✅ Microphone ${enabled ? 'enabled' : 'disabled'}`);
+        return true;
+      }
     }
-    return success;
+    console.warn('⚠️ No audio track found');
+    return false;
   }, []);
 
   /**
@@ -184,64 +250,16 @@ const useMediaRecorder = () => {
    */
   useEffect(() => {
     return () => {
+      console.log('🧹 Cleaning up media recorder...');
       stopRecording();
-      mediaService.stopStream();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log(`⏹️ Stopped track: ${track.kind}`);
+        });
+      }
     };
   }, [stopRecording]);
-
-  /**
-   * Update video element when stream changes
-   */
-  useEffect(() => {
-    if (stream && videoRef.current) {
-      console.log('Attaching stream to video element...');
-      videoRef.current.srcObject = stream;
-      
-      // Wait for video to be ready, then play
-      const video = videoRef.current;
-      
-      const tryPlay = () => {
-        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
-          video.play()
-            .then(() => {
-              console.log('Video playing successfully');
-            })
-            .catch(err => {
-              console.error('Video play error:', err);
-              // Retry after a short delay
-              setTimeout(() => {
-                if (videoRef.current) {
-                  videoRef.current.play().catch(e => {
-                    console.error('Failed to play video on retry:', e);
-                  });
-                }
-              }, 500);
-            });
-        } else {
-          // Wait for video to be ready
-          video.addEventListener('loadedmetadata', tryPlay, { once: true });
-          video.addEventListener('canplay', tryPlay, { once: true });
-        }
-      };
-      
-      // Try immediately if ready, otherwise wait for events
-      if (video.readyState >= 2) {
-        tryPlay();
-      } else {
-        video.addEventListener('loadedmetadata', tryPlay, { once: true });
-        video.addEventListener('canplay', tryPlay, { once: true });
-      }
-      
-      // Also try after a delay as fallback
-      setTimeout(() => {
-        if (videoRef.current && videoRef.current.paused) {
-          videoRef.current.play().catch(err => {
-            console.log('Delayed video play attempt:', err);
-          });
-        }
-      }, 1000);
-    }
-  }, [stream]);
 
   return {
     videoRef,

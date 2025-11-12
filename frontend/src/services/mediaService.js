@@ -10,6 +10,21 @@ class MediaService {
   }
 
   /**
+   * 🔥 FIX: Set stream (called from useMediaRecorder)
+   */
+  setStream(stream) {
+    this.stream = stream;
+    if (stream) {
+      this.videoTrack = stream.getVideoTracks()[0];
+      this.audioTrack = stream.getAudioTracks()[0];
+      console.log('✅ MediaService: Stream set', { 
+        hasVideo: !!this.videoTrack, 
+        hasAudio: !!this.audioTrack 
+      });
+    }
+  }
+
+  /**
    * Request camera and microphone permissions
    */
   async requestPermissions() {
@@ -29,10 +44,7 @@ class MediaService {
         },
       });
       
-      this.stream = stream;
-      this.videoTrack = stream.getVideoTracks()[0];
-      this.audioTrack = stream.getAudioTracks()[0];
-      
+      this.setStream(stream);
       return stream;
     } catch (error) {
       console.error('Error accessing media devices:', error);
@@ -84,11 +96,21 @@ class MediaService {
   }
 
   /**
-   * Start audio recording
+   * 🔥 FIX: Start audio recording (removed stream check, use this.audioTrack)
    */
   startAudioRecording(onDataAvailable) {
-    if (!this.stream) {
-      throw new Error('Media stream not initialized');
+    if (!this.audioTrack) {
+      console.warn('⚠️ No audio track available, attempting to get it from stream');
+      
+      // Try to get audio track from stream
+      if (this.stream) {
+        this.audioTrack = this.stream.getAudioTracks()[0];
+      }
+      
+      if (!this.audioTrack) {
+        console.error('❌ No audio track found');
+        throw new Error('Media stream not initialized - no audio track');
+      }
     }
     
     try {
@@ -121,6 +143,7 @@ class MediaService {
       
       // Start recording with chunks every N seconds
       this.mediaRecorder.start(AUDIO_SETTINGS.CHUNK_DURATION);
+      console.log('✅ Audio recording started');
       
       return true;
     } catch (error) {
@@ -136,6 +159,7 @@ class MediaService {
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
       this.mediaRecorder = null;
+      console.log('✅ Audio recording stopped');
     }
   }
 
@@ -278,10 +302,7 @@ class MediaService {
         },
       });
       
-      this.stream = stream;
-      this.videoTrack = stream.getVideoTracks()[0];
-      this.audioTrack = stream.getAudioTracks()[0];
-      
+      this.setStream(stream);
       return stream;
     } catch (error) {
       console.error('Error switching camera:', error);

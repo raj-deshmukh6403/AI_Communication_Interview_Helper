@@ -1,10 +1,8 @@
+// REPLACE ENTIRE QuestionOverlay.jsx
 import React from 'react';
-import { HelpCircle, Clock, X } from 'lucide-react';
+import { HelpCircle, Clock, Minimize2, MessageSquare, Maximize2 } from 'lucide-react';
 import { capitalizeFirst } from '../../utils/helpers';
 
-/**
- * Question Overlay Component - Shows question as overlay on full-screen video
- */
 const QuestionOverlay = ({
   question,
   questionNumber,
@@ -25,27 +23,19 @@ const QuestionOverlay = ({
 
   const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
-      case 'easy':
-        return 'bg-green-500';
-      case 'medium':
-        return 'bg-yellow-500';
-      case 'hard':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
+      case 'easy': return 'bg-green-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'hard': return 'bg-red-500';
+      default: return 'bg-gray-500';
     }
   };
 
   const getTypeColor = (type) => {
     switch (type) {
-      case 'behavioral':
-        return 'bg-blue-500';
-      case 'technical':
-        return 'bg-purple-500';
-      case 'communication':
-        return 'bg-indigo-500';
-      default:
-        return 'bg-gray-500';
+      case 'behavioral': return 'bg-blue-500';
+      case 'technical': return 'bg-purple-500';
+      case 'communication': return 'bg-indigo-500';
+      default: return 'bg-gray-500';
     }
   };
 
@@ -55,43 +45,45 @@ const QuestionOverlay = ({
     return (
       <button
         onClick={onToggleMinimize}
-        className="fixed bottom-6 left-6 z-50 bg-black/70 hover:bg-black/80 text-white px-4 py-2 rounded-lg shadow-lg transition-all"
+        className="fixed bottom-24 left-6 z-50 bg-white/90 hover:bg-white backdrop-blur-sm text-gray-900 px-4 py-2 rounded-lg shadow-lg transition-all flex items-center space-x-2"
       >
-        Question {questionNumber} of {totalQuestions} - Click to expand
+        <MessageSquare size={18} />
+        <span className="font-medium">Question {questionNumber}/{totalQuestions}</span>
+        <Maximize2 size={16} />
       </button>
     );
   }
 
-  // Render overlay in bottom-left corner so user can see themselves
+  // FIX: Position in bottom-left corner with smaller width
   return (
-    <div className="fixed bottom-6 left-6 z-50 w-80 px-2">
-      <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl border-2 border-primary-500 p-4">
+    <div className="fixed bottom-24 left-6 z-50 w-96">
+      <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl border-2 border-blue-500 p-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
             <span className="text-sm font-medium text-gray-700">
-              Question {questionNumber} of {totalQuestions}
+              Question {questionNumber}/{totalQuestions}
             </span>
             
             {question.type && (
-              <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getTypeColor(question.type)}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium text-white ${getTypeColor(question.type)}`}>
                 {capitalizeFirst(question.type)}
               </span>
             )}
             
             {question.difficulty && (
-              <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getDifficultyColor(question.difficulty)}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium text-white ${getDifficultyColor(question.difficulty)}`}>
                 {capitalizeFirst(question.difficulty)}
               </span>
             )}
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
             {/* Timer */}
             {elapsedTime !== undefined && (
-              <div className="flex items-center space-x-2 text-gray-700">
-                <Clock size={18} />
-                <span className="font-mono text-lg font-bold">{formatTime(elapsedTime)}</span>
+              <div className="flex items-center space-x-1 text-gray-700">
+                <Clock size={16} />
+                <span className="font-mono text-sm font-bold">{formatTime(elapsedTime)}</span>
               </div>
             )}
             
@@ -101,16 +93,16 @@ const QuestionOverlay = ({
               className="text-gray-500 hover:text-gray-700 p-1"
               title="Minimize"
             >
-              <X size={18} />
+              <Minimize2 size={16} />
             </button>
           </div>
         </div>
 
         {/* Question Text */}
-        <div className="mb-4">
-          <div className="flex items-start space-x-3">
-            <HelpCircle className="text-primary-600 flex-shrink-0 mt-1" size={28} />
-            <p className="text-2xl font-semibold text-gray-900 leading-relaxed">
+        <div className="mb-3">
+          <div className="flex items-start space-x-2">
+            <HelpCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+            <p className="text-base font-semibold text-gray-900 leading-relaxed">
               {question.question}
             </p>
           </div>
@@ -118,36 +110,32 @@ const QuestionOverlay = ({
 
         {/* Hints/Tips */}
         {showHints && question.type === 'behavioral' && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-start space-x-2">
-              <div>
-                <p className="text-sm font-medium text-blue-900 mb-1">STAR Method Tip:</p>
-                <div className="text-xs text-blue-800 grid grid-cols-2 gap-1">
-                  <span><strong>S</strong>ituation: Set the context</span>
-                  <span><strong>T</strong>ask: Describe your responsibility</span>
-                  <span><strong>A</strong>ction: Explain what you did</span>
-                  <span><strong>R</strong>esult: Share the outcome</span>
-                </div>
-              </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
+            <p className="text-xs font-medium text-blue-900 mb-1">💡 STAR Method</p>
+            <div className="grid grid-cols-2 gap-1 text-xs text-blue-800">
+              <span><strong>S</strong>ituation: Context</span>
+              <span><strong>T</strong>ask: Responsibility</span>
+              <span><strong>A</strong>ction: What you did</span>
+              <span><strong>R</strong>esult: Outcome</span>
             </div>
           </div>
         )}
 
         {/* Actions: Skip and Done */}
-        <div className="mt-4 flex items-center justify-end space-x-2">
+        <div className="flex items-center justify-between">
           <button
             onClick={onSkip}
-            className="text-sm px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700"
+            className="text-sm px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
             title="Skip this question"
           >
             Skip
           </button>
           <button
             onClick={onDone}
-            className="text-sm px-3 py-1 rounded-md bg-primary-600 hover:bg-primary-700 text-white"
-            title="Mark answer as done"
+            className="text-sm px-4 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white transition-colors"
+            title="Submit answer"
           >
-            Done
+            Done Answering
           </button>
         </div>
       </div>
@@ -156,4 +144,3 @@ const QuestionOverlay = ({
 };
 
 export default QuestionOverlay;
-
