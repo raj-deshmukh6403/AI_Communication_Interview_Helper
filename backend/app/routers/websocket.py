@@ -99,6 +99,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
     
     db = get_database()
     current_user = None
+    is_authenticated = False
     
     # Verify session exists
     if not ObjectId.is_valid(session_id):
@@ -133,7 +134,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
         
         # Track session state
         question_index = 0
-        session_start_time = datetime.utcnow()
+        session_start_time = None
         responses = []
         
         # Get pre-generated questions or generate new ones
@@ -146,30 +147,14 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                 position=session["position"]
             )
         
-        # Send welcome message and first question
-        await manager.send_message(session_id, {
-            "type": "session_started",
-            "message": "Welcome to your interview session!",
-            "total_questions": len(questions)
-        })
-        
-        # Send first question
-        if questions:
-            await manager.send_message(session_id, {
-                "type": "next_question",
-                "question": questions[question_index],
-                "question_number": question_index + 1,
-                "total_questions": len(questions)
-            })
-        
-        # Main message loop
+        # Main message loop - WAIT FOR AUTHENTICATION FIRST
         while True:
             # Receive message from client
             data = await websocket.receive_text()
             message = json.loads(data)
             message_type = message.get("type")
             
-            # Authentication
+            # Authentication - MUST HAPPEN FIRST
             if message_type == "auth":
                 token = message.get("token")
                 try:
@@ -180,23 +165,57 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                         await websocket.close(code=1008, reason="Unauthorized")
                         return
                     
+                    # Mark as authenticated
+                    is_authenticated = True
+                    session_start_time = datetime.utcnow()
+                    
                     # Update session status to in_progress
                     await db.sessions.update_one(
                         {"_id": ObjectId(session_id)},
                         {"$set": {"status": "in_progress"}}
                     )
                     
+                    # Send authentication success
                     await manager.send_message(session_id, {
                         "type": "auth_success",
                         "user": current_user["full_name"]
                     })
                     
+                    # NOW send session started message
+                    await manager.send_message(session_id, {
+                        "type": "session_started",
+                        "message": "Welcome to your interview session!",
+                        "total_questions": len(questions)
+                    })
+                    
+                    # Send first question after authentication
+                    if questions:
+                        await manager.send_message(session_id, {
+                            "type": "next_question",
+                            "question": questions[question_index],
+                            "question_number": question_index + 1,
+                            "total_questions": len(questions)
+                        })
+                    
+                    # Continue to process other messages
+                    continue
+                    
                 except Exception as e:
+                    print(f"Authentication error: {e}")
                     await websocket.close(code=1008, reason="Authentication failed")
                     return
             
+            # If not authenticated, ignore all other messages except ping
+            if not is_authenticated:
+                if message_type == "ping":
+                    await manager.send_message(session_id, {
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                continue
+            
             # Real-time video analysis
-            elif message_type == "video_frame":
+            if message_type == "video_frame":
                 if session_id not in session_monitors:
                     continue
                 
@@ -348,7 +367,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
             # End session and generate final feedback
             elif message_type == "end_session":
                 session_end_time = datetime.utcnow()
-                session_duration = (session_end_time - session_start_time).total_seconds() / 60
+                session_duration = (session_end_time - session_start_time).total_seconds() / 60 if session_start_time else 0
                 
                 # Generate comprehensive feedback
                 final_feedback = await feedback_generator.generate_comprehensive_feedback(
@@ -399,7 +418,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                     "type": "pong",
                     "timestamp": datetime.utcnow().isoformat()
                 })
-    
+
     except WebSocketDisconnect:
         print(f"Client disconnected from session {session_id}")
         manager.disconnect(session_id)
@@ -414,6 +433,8 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
     
     except Exception as e:
         print(f"Error in WebSocket connection: {e}")
+        import traceback
+        traceback.print_exc()
         manager.disconnect(session_id)
         
         try:

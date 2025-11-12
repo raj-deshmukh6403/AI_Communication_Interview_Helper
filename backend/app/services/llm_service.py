@@ -15,7 +15,8 @@ class LLMService:
         except Exception as e:
             print(f"Error initializing Groq client: {e}")
             self.client = None
-        self.model = "llama-3.1-70b-versatile"  # Free model
+        # Use available model - if 70b is unavailable, use 8b-instant
+        self.model = "llama-3.1-8b-instant"  # Free and available model
     
     async def generate_interview_questions(
         self, 
@@ -170,7 +171,18 @@ Return ONLY the question text, nothing else."""
             Dictionary with scores and feedback
         """
         
-        # IMPROVED in evaluate_answer_quality:
+        # Fix format string error in evaluate_answer_quality
+        star_method_section = ""
+        star_json_section = ""
+        
+        if expected_type == 'behavioral':
+            star_method_section = """5. STAR METHOD (for behavioral):
+   - Situation: Did they describe the context?
+   - Task: Was their responsibility clear?
+   - Action: Did they explain what THEY did?
+   - Result: Was there a measurable outcome?"""
+            star_json_section = '  "star_components": {"has_situation": true, "has_task": true, "has_action": true, "has_result": true},\n'
+        
         prompt = f"""You are evaluating an interview response with 10+ years of HR experience. 
 
 QUESTION TYPE: {expected_type}
@@ -185,22 +197,17 @@ EVALUATION CRITERIA:
 3. COMPLETENESS (0-100): Does it provide sufficient detail and examples?
 4. SPECIFICITY (0-100): Are there concrete examples vs vague statements?
 
-{f'''5. STAR METHOD (for behavioral):
-   - Situation: Did they describe the context?
-   - Task: Was their responsibility clear?
-   - Action: Did they explain what THEY did?
-   - Result: Was there a measurable outcome?''' if expected_type == 'behavioral' else ''}
+{star_method_section}
 
 Be constructive but honest. Grade like a tough but fair interviewer.
 
 Return ONLY this JSON (no markdown):
 {{
-  "relevance_score": 0-100,
-  "clarity_score": 0-100,
-  "completeness_score": 0-100,
-  "specificity_score": 0-100,
-  {"star_components": {"has_situation": true/false, "has_task": true/false, "has_action": true/false, "has_result": true/false}," if expected_type == 'behavioral' else ''}
-  "overall_score": 0-100,
+  "relevance_score": 75,
+  "clarity_score": 75,
+  "completeness_score": 75,
+  "specificity_score": 75,
+{star_json_section}  "overall_score": 75,
   "strengths": ["specific strength 1", "strength 2"],
   "improvements": ["specific improvement 1", "improvement 2"],
   "feedback": "2-3 sentences of constructive feedback"

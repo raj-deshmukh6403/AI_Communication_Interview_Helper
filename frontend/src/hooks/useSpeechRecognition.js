@@ -13,6 +13,7 @@ const useSpeechRecognition = () => {
   
   const recognitionRef = useRef(null);
   const onTranscriptRef = useRef(null);
+  const desiredListeningRef = useRef(false);
 
   /**
    * Initialize speech recognition
@@ -46,17 +47,41 @@ const useSpeechRecognition = () => {
     recognition.onend = () => {
       console.log('Speech recognition ended');
       setIsListening(false);
+      // Auto-restart if the consumer still wants to be listening.
+      // Some browsers stop recognition intermittently, so restart shortly.
+      if (desiredListeningRef.current) {
+        console.log('Restarting speech recognition to maintain listening state');
+        // small backoff before restarting
+        setTimeout(() => {
+          try {
+            if (recognitionRef.current) {
+              recognitionRef.current.start();
+            }
+          } catch (err) {
+            console.warn('Failed to auto-restart recognition:', err);
+          }
+        }, 250);
+      }
     };
     
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       
+      // Ignore non-critical errors
+      const nonCriticalErrors = ['no-speech', 'aborted'];
+      if (nonCriticalErrors.includes(event.error)) {
+        // These are expected in normal operation
+        if (event.error === 'no-speech') {
+          // Just log, don't show error to user
+          console.log('No speech detected (this is normal)');
+          return;
+        }
+        return;
+      }
+      
       let errorMsg = 'Speech recognition error';
       
       switch (event.error) {
-        case 'no-speech':
-          errorMsg = 'No speech detected';
-          break;
         case 'audio-capture':
           errorMsg = 'Microphone not accessible';
           break;
@@ -125,15 +150,46 @@ const useSpeechRecognition = () => {
       return false;
     }
     
+    if (!recognitionRef.current) {
+      console.error('Recognition not initialized');
+      return false;
+    }
+    
+    // Mark that caller desires listening state (used for auto-restart)
+    desiredListeningRef.current = true;
+
+    // If already listening, no-op
     if (isListening) {
-      return true; // Already listening
+      onTranscriptRef.current = onTranscript;
+      return true;
     }
     
     try {
       onTranscriptRef.current = onTranscript;
       recognitionRef.current.start();
+      // recognition.onstart will set isListening
       return true;
     } catch (err) {
+      // Handle "already started" error
+      if (err.message && err.message.includes('already started')) {
+        console.log('Recognition already started, stopping and restarting...');
+        try {
+          recognitionRef.current.stop();
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start();
+            } catch (retryErr) {
+              console.error('Error on retry:', retryErr);
+              setError(retryErr.message);
+            }
+          }, 200);
+          return true;
+        } catch (stopErr) {
+          console.error('Error stopping recognition:', stopErr);
+          setError(stopErr.message);
+          return false;
+        }
+      }
       console.error('Error starting recognition:', err);
       setError(err.message);
       return false;
@@ -144,8 +200,15 @@ const useSpeechRecognition = () => {
    * Stop listening
    */
   const stopListening = useCallback(() => {
+    // Clear desired flag so auto-restart doesn't occur
+    desiredListeningRef.current = false;
+
     if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.warn('Error stopping recognition:', err);
+      }
     }
   }, [isListening]);
 

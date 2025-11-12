@@ -31,14 +31,17 @@ class WebSocketService {
           console.log('WebSocket connected');
           this.reconnectAttempts = 0;
           
-          // Authenticate with JWT token
-          this.authenticate();
-          
-          // Start heartbeat
-          this.startHeartbeat();
-          
-          if (onOpen) onOpen();
-          resolve();
+          // Small delay to ensure connection is fully ready
+          setTimeout(() => {
+            // Authenticate with JWT token
+            this.authenticate();
+            
+            // Start heartbeat
+            this.startHeartbeat();
+            
+            if (onOpen) onOpen();
+            resolve();
+          }, 100);
         };
         
         this.ws.onmessage = (event) => {
@@ -73,14 +76,34 @@ class WebSocketService {
   authenticate() {
     const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
     
-    if (token) {
-      this.send({
-        type: WS_MESSAGE_TYPES.AUTH,
-        token: token,
-      });
-    } else {
+    if (!token) {
       console.error('No auth token found');
+      return;
     }
+    
+    // Add a small delay to ensure WebSocket is fully ready
+    // Also retry if not connected yet
+    const tryAuthenticate = () => {
+      if (this.isConnected()) {
+        try {
+          this.send({
+            type: WS_MESSAGE_TYPES.AUTH,
+            token: token,
+          });
+          console.log('Authentication message sent');
+        } catch (error) {
+          console.error('Error sending auth message:', error);
+          // Retry after a short delay
+          setTimeout(tryAuthenticate, 100);
+        }
+      } else {
+        // WebSocket not ready yet, retry after a short delay
+        setTimeout(tryAuthenticate, 100);
+      }
+    };
+    
+    // Try immediately, then retry if needed
+    tryAuthenticate();
   }
 
   /**
@@ -164,9 +187,16 @@ class WebSocketService {
    */
   send(message) {
     if (this.isConnected()) {
-      this.ws.send(JSON.stringify(message));
+      try {
+        this.ws.send(JSON.stringify(message));
+        return true;
+      } catch (error) {
+        console.error('Error sending WebSocket message:', error);
+        return false;
+      }
     } else {
       console.warn('WebSocket not connected. Message not sent:', message);
+      return false;
     }
   }
 

@@ -28,7 +28,36 @@ const useMediaRecorder = () => {
       
       // Attach stream to video element if ref exists
       if (videoRef.current) {
+        console.log('Setting video srcObject...');
         videoRef.current.srcObject = mediaStream;
+        
+        // Ensure video plays - wait for metadata
+        const video = videoRef.current;
+        const playVideo = () => {
+          video.play()
+            .then(() => {
+              console.log('Video started playing');
+            })
+            .catch(err => {
+              console.error('Video autoplay prevented:', err);
+              // Try again after user interaction or delay
+              setTimeout(() => {
+                if (videoRef.current) {
+                  videoRef.current.play().catch(e => {
+                    console.error('Retry video play failed:', e);
+                  });
+                }
+              }, 500);
+            });
+        };
+        
+        // Wait for video to be ready
+        if (video.readyState >= 2) {
+          playVideo();
+        } else {
+          video.addEventListener('loadedmetadata', playVideo, { once: true });
+          video.addEventListener('canplay', playVideo, { once: true });
+        }
       }
       
       return mediaStream;
@@ -165,7 +194,52 @@ const useMediaRecorder = () => {
    */
   useEffect(() => {
     if (stream && videoRef.current) {
+      console.log('Attaching stream to video element...');
       videoRef.current.srcObject = stream;
+      
+      // Wait for video to be ready, then play
+      const video = videoRef.current;
+      
+      const tryPlay = () => {
+        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+          video.play()
+            .then(() => {
+              console.log('Video playing successfully');
+            })
+            .catch(err => {
+              console.error('Video play error:', err);
+              // Retry after a short delay
+              setTimeout(() => {
+                if (videoRef.current) {
+                  videoRef.current.play().catch(e => {
+                    console.error('Failed to play video on retry:', e);
+                  });
+                }
+              }, 500);
+            });
+        } else {
+          // Wait for video to be ready
+          video.addEventListener('loadedmetadata', tryPlay, { once: true });
+          video.addEventListener('canplay', tryPlay, { once: true });
+        }
+      };
+      
+      // Try immediately if ready, otherwise wait for events
+      if (video.readyState >= 2) {
+        tryPlay();
+      } else {
+        video.addEventListener('loadedmetadata', tryPlay, { once: true });
+        video.addEventListener('canplay', tryPlay, { once: true });
+      }
+      
+      // Also try after a delay as fallback
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.paused) {
+          videoRef.current.play().catch(err => {
+            console.log('Delayed video play attempt:', err);
+          });
+        }
+      }, 1000);
     }
   }, [stream]);
 

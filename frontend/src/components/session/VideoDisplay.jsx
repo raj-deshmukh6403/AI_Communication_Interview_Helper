@@ -1,6 +1,5 @@
 import React from 'react';
 import { Video, VideoOff, Mic, MicOff, Camera } from 'lucide-react';
-import Button from '../common/Button';
 
 /**
  * Video Display Component - Shows user's camera feed with controls
@@ -15,20 +14,32 @@ const VideoDisplay = ({
   onTakeScreenshot,
 }) => {
   return (
-    <div className="relative bg-gray-900 rounded-lg overflow-hidden shadow-xl">
+    <div className="relative bg-gray-900 rounded-lg overflow-hidden shadow-xl w-full" style={{ minHeight: '400px', aspectRatio: '16/9' }}>
       {/* Video Element */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover video-mirror"
-        style={{ maxHeight: '480px' }}
+        className="w-full h-full object-cover"
+        style={{ 
+          width: '100%',
+          height: '100%',
+          minHeight: '400px',
+          transform: 'scaleX(-1)', // Mirror effect
+          backgroundColor: '#111827' // Dark background when no video
+        }}
+        onLoadedMetadata={(e) => {
+          // Ensure video plays
+          e.target.play().catch(err => {
+            console.log('Video autoplay prevented:', err);
+          });
+        }}
       />
 
       {/* Recording Indicator */}
       {isRecording && (
-        <div className="absolute top-4 left-4 flex items-center space-x-2 bg-red-600 text-white px-3 py-1.5 rounded-full">
+        <div className="absolute top-4 left-4 flex items-center space-x-2 bg-red-600 text-white px-3 py-1.5 rounded-full z-10">
           <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
           <span className="text-sm font-medium">Recording</span>
         </div>
@@ -36,7 +47,7 @@ const VideoDisplay = ({
 
       {/* Camera Off Overlay */}
       {!isCameraEnabled && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-20">
           <div className="text-center text-white">
             <VideoOff size={64} className="mx-auto mb-4 opacity-50" />
             <p className="text-lg">Camera is off</p>
@@ -45,7 +56,7 @@ const VideoDisplay = ({
       )}
 
       {/* Controls */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3">
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 z-10">
         {/* Camera Toggle */}
         <button
           onClick={onToggleCamera}
@@ -86,7 +97,7 @@ const VideoDisplay = ({
 
       {/* Microphone Muted Indicator */}
       {!isMicEnabled && (
-        <div className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1.5 rounded-full flex items-center space-x-2">
+        <div className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 z-10">
           <MicOff size={16} />
           <span className="text-sm">Muted</span>
         </div>
