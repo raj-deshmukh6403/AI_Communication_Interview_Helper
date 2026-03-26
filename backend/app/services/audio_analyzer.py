@@ -102,7 +102,21 @@ class AudioAnalyzer:
             if "," in audio_data:
                 audio_data = audio_data.split(",")[1]
             audio_bytes = base64.b64decode(audio_data)
-            y, sr = librosa.load(io.BytesIO(audio_bytes), sr=sample_rate)
+            try:
+                y, sr = librosa.load(io.BytesIO(audio_bytes), sr=sample_rate)
+            except Exception:
+                # Browser sends WebM/Opus — write to temp file for librosa
+                import tempfile, uuid
+                tmp = f"tmp_audio_{uuid.uuid4().hex}.webm"
+                with open(tmp, 'wb') as f:
+                    f.write(audio_bytes)
+                try:
+                    y, sr = librosa.load(tmp, sr=sample_rate)
+                finally:
+                    try:
+                        os.remove(tmp)
+                    except:
+                        pass
 
             analysis = {
                 "timestamp":          datetime.utcnow().isoformat(),

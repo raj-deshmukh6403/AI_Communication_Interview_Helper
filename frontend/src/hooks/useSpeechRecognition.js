@@ -15,6 +15,7 @@ const useSpeechRecognition = () => {
   const onTranscriptRef = useRef(null);
   const desiredListeningRef = useRef(false);
   const isInitializedRef = useRef(false);
+  const isListeningRef = useRef(false);
 
   /**
    * Initialize speech recognition
@@ -53,12 +54,14 @@ const useSpeechRecognition = () => {
     recognition.onstart = () => {
       console.log('🎙️ Speech recognition STARTED');
       setIsListening(true);
+      isListeningRef.current = true;
       setError(null);
     };
     
     recognition.onend = () => {
       console.log('🛑 Speech recognition ENDED');
       setIsListening(false);
+      isListeningRef.current = false;
       
       // CRITICAL: Auto-restart if still desired
       if (desiredListeningRef.current) {
@@ -200,7 +203,7 @@ const useSpeechRecognition = () => {
     console.log('✅ Desired listening state: true');
 
     // If already listening, just update callback
-    if (isListening) {
+    if (isListeningRef.current) {
       console.log('ℹ️ Already listening, updating callback');
       onTranscriptRef.current = onTranscript;
       return true;
@@ -237,7 +240,7 @@ const useSpeechRecognition = () => {
       setError(err.message);
       return false;
     }
-  }, [isSupported, isListening]);
+  }, [isSupported]);
 
   /**
    * Stop listening
@@ -249,7 +252,7 @@ const useSpeechRecognition = () => {
     desiredListeningRef.current = false;
     console.log('✅ Desired listening state: false');
 
-    if (recognitionRef.current && isListening) {
+    if (recognitionRef.current && isListeningRef.current) {
       try {
         recognitionRef.current.stop();
         console.log('✅ Speech recognition stopped');
@@ -257,7 +260,7 @@ const useSpeechRecognition = () => {
         console.warn('⚠️ Stop error:', err);
       }
     }
-  }, [isListening]);
+  }, []);
 
   /**
    * Reset transcript

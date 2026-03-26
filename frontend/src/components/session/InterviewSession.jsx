@@ -132,6 +132,7 @@ const InterviewSession = ({ sessionId }) => {
       console.log('🧹 Cleanup: Stopping all services');
       stopRecording();
       stopListening();
+      window.speechSynthesis.cancel();
       disconnect();
       
       if (videoFrameIntervalRef.current) {
@@ -183,33 +184,21 @@ const InterviewSession = ({ sessionId }) => {
         console.warn('TTS question read failed:', e);
       }
       
-      if (isListening) {
-        console.log('🛑 Stopping previous speech recognition...');
-        stopListening();
-      }
-      
-      if (isSpeechSupported && isSessionStarted) {
-        setTimeout(() => {
-          try {
-            console.log('🎤 Starting speech recognition for new question...');
-            startListening((finalTranscript) => {
-              console.log('📝 Final transcript:', finalTranscript);
-            });
-          } catch (error) {
-            console.warn('⚠️ Failed to start speech:', error);
-            setTimeout(() => {
-              try {
-                console.log('🔄 Retrying speech recognition...');
-                startListening((finalTranscript) => {
-                  console.log('📝 Final transcript (retry):', finalTranscript);
-                });
-              } catch (retryError) {
-                console.error('❌ Speech retry failed:', retryError);
-              }
-            }, 1000);
-          }
-        }, 800);
-      }
+      // Reset transcript for new question
+        resetTranscript();
+
+        // Just ensure desired state is true — auto-restart handles the rest
+        if (isSpeechSupported && isSessionStarted) {
+          setTimeout(() => {
+            try {
+              startListening((finalTranscript) => {
+                console.log('📝 Final transcript:', finalTranscript);
+              });
+            } catch (error) {
+              console.warn('⚠️ Failed to start speech:', error);
+            }
+          }, 500);
+        }
     };
 
     const handleIntervention = (message) => {
@@ -301,7 +290,7 @@ const InterviewSession = ({ sessionId }) => {
       off(WS_MESSAGE_TYPES.ANSWER_FEEDBACK);
       off(WS_MESSAGE_TYPES.ALL_QUESTIONS_COMPLETE);
     };
-  }, [isConnected, isSessionStarted, isSpeechSupported, isListening,]);
+  }, [isConnected, isSessionStarted, isSpeechSupported]);
 
   useEffect(() => {
     if (isConnected && 
@@ -532,6 +521,7 @@ const InterviewSession = ({ sessionId }) => {
   const confirmEndSession = () => {
     // User explicitly confirmed end - ask server to end session and show "ending" UI
     try {
+      window.speechSynthesis.cancel();
       endSession();
       setIsEnding(true);
     } catch (err) {
