@@ -30,6 +30,7 @@ class SessionResponse(BaseModel):
     job_description: str
     company_name: Optional[str]
     position: str
+    session_name: str = ""  
     session_date: datetime
     status: str
     duration_minutes: Optional[float]
@@ -41,7 +42,9 @@ class SessionResponse(BaseModel):
                 "id": "507f1f77bcf86cd799439011",
                 "user_id": "507f1f77bcf86cd799439012",
                 "job_description": "Looking for software engineer...",
+                "company_name": "Tech Corp",
                 "position": "Software Engineer",
+                "session_name": "Software Engineer Interview",
                 "session_date": "2024-01-01T10:00:00",
                 "status": "completed",
                 "duration_minutes": 25.5,

@@ -1,0 +1,143 @@
+@startuml AI Interview Coach - Use Case Diagram
+
+' Define actors
+actor "Candidate/\nInterviewee" as candidate
+actor "System/\nAI Coach" as system
+actor "Backend\nServices" as backend
+
+' Define use case package
+package "AI Interview Coach System" {
+  
+  ' Authentication & Profile Management
+  package "User Management" {
+    usecase "Register Account" as UC1
+    usecase "Login" as UC2
+    usecase "Manage Profile" as UC3
+    usecase "View Dashboard" as UC4
+  }
+  
+  ' Session Management
+  package "Interview Session Management" {
+    usecase "Create New Session" as UC5
+    usecase "Configure Session\n(Job Role, Difficulty)" as UC6
+    usecase "Start Interview" as UC7
+    usecase "End Session Early" as UC8
+    usecase "View Session Results" as UC9
+  }
+  
+  ' Interview Execution
+  package "Interview Execution" {
+    usecase "Grant Camera/Mic\nPermissions" as UC10
+    usecase "Receive Question" as UC11
+    usecase "Answer Question\n(Voice)" as UC12
+    usecase "Skip Question" as UC13
+    usecase "Mark Answer Done" as UC14
+    usecase "View Question Timer" as UC15
+    usecase "Minimize/Expand\nQuestion" as UC16
+  }
+  
+  ' Real-time Analysis
+  package "Real-time AI Analysis" {
+    usecase "Analyze Video\n(Facial, Gestures)" as UC17
+    usecase "Analyze Audio\n(Voice Quality)" as UC18
+    usecase "Transcribe Speech" as UC19
+    usecase "Monitor Communication\nPatterns" as UC20
+    usecase "Generate Real-time\nInterventions" as UC21
+  }
+  
+  ' Feedback & Analytics
+  package "Feedback & Analytics" {
+    usecase "Generate Session\nFeedback" as UC22
+    usecase "View Performance\nMetrics" as UC23
+    usecase "Compare Sessions" as UC24
+    usecase "View Detailed\nAnalytics" as UC25
+    usecase "Download Reports" as UC26
+  }
+  
+  ' Technical Features
+  package "Technical Operations" {
+    usecase "Capture Video Frames" as UC27
+    usecase "Record Audio Chunks" as UC28
+    usecase "Maintain WebSocket\nConnection" as UC29
+    usecase "Store Session Data" as UC30
+    usecase "Generate Questions\n(LLM)" as UC31
+  }
+}
+
+' Candidate relationships
+candidate --> UC1
+candidate --> UC2
+candidate --> UC3
+candidate --> UC4
+candidate --> UC5
+candidate --> UC6
+candidate --> UC7
+candidate --> UC8
+candidate --> UC9
+candidate --> UC10
+candidate --> UC11
+candidate --> UC12
+candidate --> UC13
+candidate --> UC14
+candidate --> UC15
+candidate --> UC16
+candidate --> UC23
+candidate --> UC24
+candidate --> UC25
+candidate --> UC26
+
+' System/AI relationships
+system --> UC17
+system --> UC18
+system --> UC19
+system --> UC20
+system --> UC21
+system --> UC22
+system --> UC31
+
+' Backend relationships
+backend --> UC27
+backend --> UC28
+backend --> UC29
+backend --> UC30
+
+' Include relationships
+UC7 ..> UC10 : <<include>>
+UC7 ..> UC29 : <<include>>
+UC12 ..> UC19 : <<include>>
+UC12 ..> UC27 : <<include>>
+UC12 ..> UC28 : <<include>>
+UC21 ..> UC17 : <<include>>
+UC21 ..> UC18 : <<include>>
+UC22 ..> UC17 : <<include>>
+UC22 ..> UC18 : <<include>>
+UC22 ..> UC19 : <<include>>
+UC9 ..> UC22 : <<include>>
+
+' Extend relationships
+UC13 ..> UC12 : <<extend>>
+UC14 ..> UC12 : <<extend>>
+UC16 ..> UC11 : <<extend>>
+UC8 ..> UC7 : <<extend>>
+
+' Notes
+note right of UC12
+  Speech recognition converts
+  voice to text in real-time
+end note
+
+note right of UC21
+  AI provides immediate
+  feedback on communication
+  issues (filler words,
+  eye contact, etc.)
+end note
+
+note bottom of UC29
+  WebSocket enables
+  real-time bidirectional
+  communication between
+  frontend and backend
+end note
+
+@enduml

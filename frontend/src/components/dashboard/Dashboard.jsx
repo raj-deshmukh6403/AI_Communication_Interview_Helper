@@ -29,27 +29,31 @@ const Dashboard = () => {
   }, []);
 
   const loadDashboardData = async () => {
-    setIsLoading(true);
-    setError(null);
+      setIsLoading(true);
+      setError(null);
+      try {
+        const [sessionsData, statsData] = await Promise.all([
+          sessionService.getSessions(10, 0),
+          sessionService.getProgressStats(),
+        ]);
+        setSessions(sessionsData);
+        setStats(statsData);
+      } catch (err) {
+        console.error('Error loading dashboard:', err);
+        setError(getErrorMessage(err));
+      } finally {
+        setIsLoading(false);
+      }
 
-    try {
-      // Load sessions and stats in parallel
-      const [sessionsData, statsData, weakAreasData] = await Promise.all([
-        sessionService.getSessions(10, 0),
-        sessionService.getProgressStats(),
-        sessionService.getWeakAreas(3),
-      ]);
-
-      setSessions(sessionsData);
-      setStats(statsData);
-      setWeakAreas(weakAreasData.weak_areas || []);
-    } catch (err) {
-      console.error('Error loading dashboard:', err);
-      setError(getErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      // Load weak areas separately — don't crash dashboard if this fails
+      try {
+        const weakAreasData = await sessionService.getWeakAreas(3);
+        setWeakAreas(weakAreasData.weak_areas || []);
+      } catch (err) {
+        console.warn('Weak areas unavailable:', err);
+        setWeakAreas([]);
+      }
+    };
 
   // Handle session deletion
   const handleDeleteSession = async (sessionId) => {
@@ -158,6 +162,7 @@ const Dashboard = () => {
             data={stats.score_trend.map((item, index) => ({
               x: index + 1,
               y: item.score,
+              label: item.session_name || item.position,
             }))}
             type="area"
           />

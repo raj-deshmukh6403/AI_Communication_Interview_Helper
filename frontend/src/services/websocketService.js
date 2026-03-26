@@ -19,7 +19,9 @@ class WebSocketService {
     return new Promise((resolve, reject) => {
       this.sessionId = sessionId;
       this.isIntentionallyClosed = false;
-      
+      let isSettled = false;
+      let hasOpened = false;
+
       const wsUrl = `${WS_URL}/ws/interview/${sessionId}`;
       
       console.log('Connecting to WebSocket:', wsUrl);
@@ -28,6 +30,7 @@ class WebSocketService {
         this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
+          hasOpened = true;
           console.log('WebSocket connected');
           this.reconnectAttempts = 0;
           
@@ -40,7 +43,10 @@ class WebSocketService {
             this.startHeartbeat();
             
             if (onOpen) onOpen();
-            resolve();
+            if (!isSettled) {
+              isSettled = true;
+              resolve();
+            }
           }, 100);
         };
         
@@ -51,13 +57,26 @@ class WebSocketService {
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error);
           if (onError) onError(error);
+          // If the socket has not opened yet, treat this as a hard failure
+          if (!hasOpened && !isSettled) {
+            isSettled = true;
+            const err = error instanceof Error ? error : new Error('WebSocket connection error');
+            reject(err);
+          }
         };
         
         this.ws.onclose = (event) => {
           console.log('WebSocket closed:', event.code, event.reason);
           this.stopHeartbeat();
-          
-          // Attempt to reconnect if not intentionally closed
+
+          // If we never opened successfully, surface this as an initial connect failure
+          if (!hasOpened && !isSettled) {
+            isSettled = true;
+            reject(new Error(`WebSocket closed before opening (code ${event.code}): ${event.reason || 'no reason provided'}`));
+            return;
+          }
+
+          // After a successful open, use existing reconnect logic
           if (!this.isIntentionallyClosed && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.attemptReconnect(onOpen, onError);
           }
@@ -65,7 +84,10 @@ class WebSocketService {
         
       } catch (error) {
         console.error('Failed to create WebSocket:', error);
-        reject(error);
+        if (!isSettled) {
+          isSettled = true;
+          reject(error);
+        }
       }
     });
   }

@@ -170,7 +170,8 @@ const sessionService = {
       
       return response;
     } catch (error) {
-      throw error;
+      console.warn('Weak areas endpoint not available');
+      return { weak_areas: [] }; 
     }
   },
 };

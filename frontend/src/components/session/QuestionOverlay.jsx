@@ -14,6 +14,7 @@ const QuestionOverlay = ({
   onToggleMinimize,
   onSkip = () => {},
   onDone = () => {},
+  isFollowUp = false,
 }) => {
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -64,6 +65,12 @@ const QuestionOverlay = ({
             <span className="text-sm font-medium text-gray-700">
               Question {questionNumber}/{totalQuestions}
             </span>
+
+            {isFollowUp && (
+              <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-2">
+                FOLLOW-UP
+              </span>
+            )}
             
             {question.type && (
               <span className={`px-2 py-0.5 rounded text-xs font-medium text-white ${getTypeColor(question.type)}`}>
@@ -144,3 +151,4 @@ const QuestionOverlay = ({
 };
 
 export default QuestionOverlay;
+

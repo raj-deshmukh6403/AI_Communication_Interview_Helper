@@ -1,9 +1,18 @@
+//https://github.com/copilot/c/ea1f7412-da9c-482d-96dd-0813e96b15bf
+
+/* Full file with targeted changes:
+   - adds isEnding state
+   - handleSubmitAnswer no longer sets isSessionComplete locally; it calls endSession() and flips isEnding when finishing last question
+   - confirmEndSession sets isEnding
+   - SESSION_COMPLETE handler clears isEnding and performs cleanup and sets final feedback
+*/
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Mic, MicOff, Video, VideoOff, X, CheckCircle } from 'lucide-react';
 import useWebSocket from '../../hooks/useWebSocket';
 import useMediaRecorder from '../../hooks/useMediaRecorder';
 import useSpeechRecognition from '../../hooks/useSpeechRecognition';
+import useTextToSpeech from '../../hooks/useTextToSpeech';
 import QuestionOverlay from './QuestionOverlay';
 import InterventionAlert from './InterventionAlert';
 import SessionComplete from './SessionComplete';
@@ -53,16 +62,7 @@ const InterviewSession = ({ sessionId }) => {
     getFullTranscript,
   } = useSpeechRecognition();
 
-  // --- added helper: wait for the videoRef to be mounted before requesting permissions ---
-  const waitForVideoRef = async (timeout = 3000) => {
-    const start = Date.now();
-    while (!videoRef.current && Date.now() - start < timeout) {
-      // small pause, waiting for the video element to mount
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    return !!videoRef.current;
-  };
+  const { isSupported: isTtsSupported, speak: speakQuestion } = useTextToSpeech();
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
@@ -81,46 +81,39 @@ const InterviewSession = ({ sessionId }) => {
   const [isQuestionMinimized, setIsQuestionMinimized] = useState(false);
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
   
+  //right now new code
+  const [liveWarnings, setLiveWarnings] = useState([]);
+  const [answerFeedback, setAnswerFeedback] = useState(null);
+  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+
+  // NEW: isEnding indicates we've requested the server to end the session and are waiting for confirmation
+  const [isEnding, setIsEnding] = useState(false);
+
+  // Live analytics from backend (video + audio)
+  const [liveAnalytics, setLiveAnalytics] = useState({
+    video: null,
+    audio: null,
+    lastUpdated: null,
+  });
+
   const autoSubmitTimerRef = useRef(null);
   const videoFrameIntervalRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const hasAutoStartedRef = useRef(false);
   const isStartingRef = useRef(false);
+  // right now new code
+  const frameCounterRef = useRef(0);
+  // end of right now new code
 
   useEffect(() => {
     const init = async () => {
       try {
         setError(null);
         console.log('🚀 Starting initialization...');
-
-        // Wait for video element to mount so we can attach stream immediately
-        const ready = await waitForVideoRef(3000);
-        if (!ready) {
-          console.warn('⚠️ videoRef not ready after wait — proceeding but stream attach will be attempted in hook');
-        } else {
-          console.log('✅ videoRef ready - proceeding to request permissions');
-        }
-
-        const mediaStream = await requestPermissions();
-        console.log('✅ Media permissions granted (InterviewSession)', mediaStream);
         
-        // SAFETY: attach stream directly to the component video element if available
-        if (mediaStream && videoRef && videoRef.current) {
-          try {
-            console.log('🔗 Attaching returned MediaStream to videoRef in InterviewSession...');
-            const v = videoRef.current;
-            v.muted = true;
-            v.playsInline = true;
-            v.autoplay = true;
-            v.srcObject = mediaStream;
-            v.play().then(() => console.log('✅ Interview video play() succeeded')).catch(err => {
-              console.warn('⚠️ Interview video play() blocked or failed:', err && err.message ? err.message : err);
-            });
-          } catch (attachErr) {
-            console.warn('⚠️ Failed to attach stream to videoRef in InterviewSession:', attachErr);
-          }
-        }
-
+        await requestPermissions();
+        console.log('✅ Media permissions granted');
+        
         await new Promise(resolve => setTimeout(resolve, 500));
         
         await connect();
@@ -176,6 +169,19 @@ const InterviewSession = ({ sessionId }) => {
       setAnswerStartTime(Date.now());
       setElapsedTime(0);
       setIsQuestionMinimized(false);
+      //right now new code
+      setIsGeneratingFeedback(false);
+      setAnswerFeedback(null);
+
+      // Read the question aloud using browser TTS (if available)
+      try {
+        const qText = message.question?.question || '';
+        if (isTtsSupported && qText) {
+          speakQuestion(qText, { rate: 1, pitch: 1 });
+        }
+      } catch (e) {
+        console.warn('TTS question read failed:', e);
+      }
       
       if (isListening) {
         console.log('🛑 Stopping previous speech recognition...');
@@ -218,28 +224,84 @@ const InterviewSession = ({ sessionId }) => {
       }, 10000);
     };
 
-    const handleSessionComplete = (message) => {
-      console.log('✅ Session complete:', message);
-      setFinalFeedback(message.feedback);
-      setIsSessionComplete(true);
-      stopRecording();
-      stopListening();
+    const handleAnalytics = (message) => {
+      // Server sends: { type: 'analytics', data: { video?, audio?, timestamp } }
+      const data = message.data || {};
+      setLiveAnalytics((prev) => ({
+        video: data.video || prev.video,
+        audio: data.audio || prev.audio,
+        lastUpdated: data.timestamp || new Date().toISOString(),
+      }));
+
+      //right now new code
+      const warnings = message?.data?.video?.warnings || [];
+      if (warnings.length > 0) {
+        setLiveWarnings(warnings);
+        setTimeout(() => setLiveWarnings([]), 4000);
+      }
     };
+
+    // IMPORTANT: SESSION_COMPLETE is authoritative - when server sends it we finalize on client
+    const handleSessionComplete = (message) => {
+      console.log('✅ Session complete (server):', message);
+      setFinalFeedback(message.feedback || null);
+
+      // Stop recording and speech recognition once server declares session complete
+      try { stopRecording(); } catch (e) { console.warn('stopRecording error', e); }
+      try { stopListening(); } catch (e) { console.warn('stopListening error', e); }
+
+      // Clear any timers
+      if (videoFrameIntervalRef.current) clearInterval(videoFrameIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+
+      // Clear ending flag and mark session complete
+      setIsEnding(false);
+      setIsSessionComplete(true);
+    };
+
+    //right now new code
+    const handleAnswerFeedback = (message) => {
+      setAnswerFeedback({
+        score: message.score,
+        preScore: message.pre_score,
+        feedback: message.feedback,
+        action: message.action,
+      });
+      setTimeout(() => setAnswerFeedback(null), 5000);
+    };
+
+    const handleAllQuestionsComplete = (message) => {
+      setIsGeneratingFeedback(true);
+    };
+
+    //
 
     on(WS_MESSAGE_TYPES.AUTH_SUCCESS, handleAuthSuccess);
     on(WS_MESSAGE_TYPES.SESSION_STARTED, handleSessionStarted);
     on(WS_MESSAGE_TYPES.NEXT_QUESTION, handleNextQuestion);
     on(WS_MESSAGE_TYPES.INTERVENTION, handleIntervention);
+    //on(WS_MESSAGE_TYPES.ANALYTICS, handleAnalytics);
     on(WS_MESSAGE_TYPES.SESSION_COMPLETE, handleSessionComplete);
+    //right now new code
+    on(WS_MESSAGE_TYPES.ANALYTICS, handleAnalytics);
+    on(WS_MESSAGE_TYPES.ANSWER_FEEDBACK, handleAnswerFeedback);
+    on(WS_MESSAGE_TYPES.ALL_QUESTIONS_COMPLETE, handleAllQuestionsComplete);
 
     return () => {
       off(WS_MESSAGE_TYPES.AUTH_SUCCESS);
       off(WS_MESSAGE_TYPES.SESSION_STARTED);
       off(WS_MESSAGE_TYPES.NEXT_QUESTION);
       off(WS_MESSAGE_TYPES.INTERVENTION);
+      //off(WS_MESSAGE_TYPES.ANALYTICS);
       off(WS_MESSAGE_TYPES.SESSION_COMPLETE);
+
+      //right now new code
+      off(WS_MESSAGE_TYPES.ANALYTICS);
+      off(WS_MESSAGE_TYPES.ANSWER_FEEDBACK);
+      off(WS_MESSAGE_TYPES.ALL_QUESTIONS_COMPLETE);
     };
-  }, [isConnected, isSessionStarted, isSpeechSupported, isListening]);
+  }, [isConnected, isSessionStarted, isSpeechSupported, isListening,]);
 
   useEffect(() => {
     if (isConnected && 
@@ -339,13 +401,10 @@ const InterviewSession = ({ sessionId }) => {
       if (isSpeechSupported) {
         setTimeout(() => {
           try {
-            console.log('🎤 Attempting to start speech recognition...');
-            const startedSpeech = startListening((finalTranscript) => {
+            console.log('🎤 Starting speech recognition...');
+            startListening((finalTranscript) => {
               console.log('📝 Speech final:', finalTranscript);
             });
-            if (!startedSpeech) {
-              console.warn('⚠️ startListening returned false — speech recognition did not start');
-            }
           } catch (error) {
             console.warn('⚠️ Speech start failed:', error);
           }
@@ -358,9 +417,16 @@ const InterviewSession = ({ sessionId }) => {
   };
 
   const handleVideoFrame = (frameData) => {
+    // if (isConnected && isSessionStarted) {
+    //   sendVideoFrame(frameData);
+    // }
+    //right now new code
+    frameCounterRef.current += 1;
+    if (frameCounterRef.current % 3 !== 0) return;  // send every 3rd frame only
     if (isConnected && isSessionStarted) {
       sendVideoFrame(frameData);
     }
+
   };
 
   const handleAudioChunk = (audioData) => {
@@ -370,11 +436,18 @@ const InterviewSession = ({ sessionId }) => {
     }
   };
 
-  const handleSubmitAnswer = () => {
+  /**
+   * Submit answer.
+   * If force === true, submit even when answer is short/empty (user clicked "Done").
+   *
+   * NOTE: When the last question is answered we send END_SESSION and set isEnding=true.
+   * We do NOT mark the session complete locally — we wait for the server's SESSION_COMPLETE.
+   */
+  const handleSubmitAnswer = (force = false) => {
     const finalAnswer = answer.trim() || getFullTranscript().trim();
     
-    if (!finalAnswer || finalAnswer.length < 10) {
-      console.warn('⚠️ Answer too short or empty');
+    if (!finalAnswer && !force) {
+      console.warn('⚠️ Answer too short or empty, not submitting');
       return;
     }
 
@@ -383,10 +456,14 @@ const InterviewSession = ({ sessionId }) => {
       return;
     }
 
-    console.log('📤 Submitting answer:', finalAnswer.substring(0, 50) + '...');
+    console.log('📤 Submitting answer:', (finalAnswer || '[empty]').substring(0, 50) + '...');
 
-    const duration = (Date.now() - answerStartTime) / 1000;
-    sendAnswer(currentQuestion.question, finalAnswer, duration);
+    const duration = answerStartTime ? ((Date.now() - answerStartTime) / 1000) : 0;
+    try {
+      sendAnswer(currentQuestion.question, finalAnswer, duration);
+    } catch (err) {
+      console.warn('Failed to send answer:', err);
+    }
     
     setAnswerSubmitted(true);
     setIsAnswering(false);
@@ -403,6 +480,23 @@ const InterviewSession = ({ sessionId }) => {
     }
 
     console.log('✅ Answer submitted successfully');
+
+    // If this was the last question, instruct server to finalize session and enter "ending" state.
+    // IMPORTANT: do not set isSessionComplete locally here; wait for server SESSION_COMPLETE.
+    if (questionNumber && totalQuestions && questionNumber >= totalQuestions) {
+      console.log('🏁 Last question answered - requesting server to end session');
+      try {
+        endSession();            // send END_SESSION to server
+        setIsEnding(true);       // show "ending" UI while we wait for server confirmation
+      } catch (err) {
+        console.warn('Failed to send endSession message:', err);
+        // If sending fails, fallback to local cleanup (but still indicate we couldn't notify server)
+        stopRecording();
+        stopListening();
+        setIsEnding(false);
+        setIsSessionComplete(true);
+      }
+    }
   };
 
   const handleSkipQuestion = () => {
@@ -436,7 +530,17 @@ const InterviewSession = ({ sessionId }) => {
   };
 
   const confirmEndSession = () => {
-    endSession();
+    // User explicitly confirmed end - ask server to end session and show "ending" UI
+    try {
+      endSession();
+      setIsEnding(true);
+    } catch (err) {
+      console.warn('Failed to send endSession on confirm:', err);
+      // fallback: do local cleanup
+      stopRecording();
+      stopListening();
+      setIsSessionComplete(true);
+    }
     setShowExitModal(false);
   };
 
@@ -474,8 +578,22 @@ const InterviewSession = ({ sessionId }) => {
     );
   }
 
+  // Optional: show a small "ending..." overlay while waiting for server confirmation
+  const EndingOverlay = () => (
+    <div className="fixed inset-0 z-60 flex items-center justify-center pointer-events-none">
+      <div className="bg-black/60 backdrop-blur-sm text-white px-6 py-3 rounded-lg shadow-2xl pointer-events-auto">
+        <div className="flex items-center space-x-3">
+          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+          <span className="text-sm font-medium">Ending session — waiting for server...</span>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      {isEnding && <EndingOverlay />}
+
       <div className="fixed inset-0 z-0 bg-black">
         <video
           ref={videoRef}
@@ -488,7 +606,53 @@ const InterviewSession = ({ sessionId }) => {
             backgroundColor: '#000000',
           }}
         />
-        
+
+        {/* right now new code */}
+
+        {/* Live warnings overlay */}
+        {liveWarnings.length > 0 && (
+          <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-20 space-y-1">
+            {liveWarnings.map((warning, i) => (
+              <div key={i} className="bg-yellow-500/90 text-black text-sm font-semibold px-4 py-2 rounded-lg shadow-lg text-center">
+                ⚠️ {warning}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Answer feedback toast */}
+        {answerFeedback && (
+          <div className="absolute top-24 right-4 z-50 bg-black/80 text-white rounded-lg p-4 shadow-xl w-72">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-lg">Answer Score</span>
+              <span className={`text-2xl font-bold ${answerFeedback.score >= 70 ? 'text-green-400' : answerFeedback.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                {Math.round(answerFeedback.score || 0)}
+              </span>
+            </div>
+            {answerFeedback.preScore && (
+              <p className="text-xs text-gray-400 mb-1">Pre-score: {Math.round(answerFeedback.preScore)}</p>
+            )}
+            {answerFeedback.feedback && (
+              <p className="text-sm text-gray-300">{answerFeedback.feedback}</p>
+            )}
+            {answerFeedback.action === 'follow_up' && (
+              <p className="text-xs text-blue-400 mt-2">📌 Follow-up question coming...</p>
+            )}
+          </div>
+        )}
+
+        {/* Generating feedback loading state */}
+        {isGeneratingFeedback && (
+          <div className="absolute inset-0 z-40 bg-black/70 flex items-center justify-center">
+            <div className="text-center text-white">
+              <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-xl font-semibold">Generating your feedback report...</p>
+              <p className="text-gray-400 mt-2">Analysing all your responses</p>
+            </div>
+          </div>
+        )}
+        {/* End of right now new code */}
+
         {!isCameraEnabled && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
             <div className="text-center text-white">
@@ -553,6 +717,74 @@ const InterviewSession = ({ sessionId }) => {
         </div>
       </div>
 
+      {/* Live analytics overlay (eye contact, engagement, audio metrics) */}
+      {(liveAnalytics.video || liveAnalytics.audio) && (
+        <div className="fixed bottom-6 left-6 z-40">
+          <div className="bg-black/70 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-2xl text-xs min-w-[220px]">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-semibold">Live Analysis</span>
+              <span className="text-[10px] text-gray-400">
+                {liveAnalytics.lastUpdated
+                  ? new Date(liveAnalytics.lastUpdated).toLocaleTimeString()
+                  : ''}
+              </span>
+            </div>
+
+            {liveAnalytics.video && (
+              <div className="mb-2 border-b border-white/10 pb-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Eye contact</span>
+                  <span className="font-semibold">
+                    {Math.round(liveAnalytics.video.eye_contact_score || 0)}%
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-400 mt-1">
+                  <span>Engagement</span>
+                  <span>
+                    {liveAnalytics.video.engagement_score != null
+                      ? Math.round(liveAnalytics.video.engagement_score)
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-400 mt-1">
+                  <span>Emotion</span>
+                  <span className="capitalize">
+                    {liveAnalytics.video.dominant_emotion || 'neutral'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {liveAnalytics.audio && (
+              <div>
+                <div className="flex justify-between text-[11px] text-gray-300">
+                  <span>Speaking pace</span>
+                  <span>
+                    {liveAnalytics.audio.speaking_pace
+                      ? `${Math.round(liveAnalytics.audio.speaking_pace)} wpm`
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-300 mt-1">
+                  <span>Volume</span>
+                  <span>
+                    {liveAnalytics.audio.volume_level != null
+                      ? `${Math.round(liveAnalytics.audio.volume_level)}/100`
+                      : '—'}
+                  </span>
+                </div>
+                {liveAnalytics.audio.filler_words_count != null && (
+                  <div className="flex justify-between text-[11px] text-gray-300 mt-1">
+                    <span>Filler words</span>
+                    <span>{liveAnalytics.audio.filler_words_count}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {currentQuestion && (
         <QuestionOverlay
           question={currentQuestion}
@@ -561,9 +793,12 @@ const InterviewSession = ({ sessionId }) => {
           elapsedTime={elapsedTime}
           showHints={true}
           isMinimized={isQuestionMinimized}
+          //right now new code
+          isFollowUp={currentQuestion?.type === 'follow_up'}   
+          //end of right now new code
           onToggleMinimize={() => setIsQuestionMinimized(!isQuestionMinimized)}
           onSkip={handleSkipQuestion}
-          onDone={handleSubmitAnswer}
+          onDone={() => handleSubmitAnswer(true)}
         />
       )}
 
@@ -632,7 +867,7 @@ const InterviewSession = ({ sessionId }) => {
 
           {isAnswering && currentQuestion && answer.trim().length > 20 && !answerSubmitted && (
             <button
-              onClick={handleSubmitAnswer}
+              onClick={() => handleSubmitAnswer(false)}
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full flex items-center space-x-2 transition-all font-medium"
             >
               <CheckCircle size={20} />

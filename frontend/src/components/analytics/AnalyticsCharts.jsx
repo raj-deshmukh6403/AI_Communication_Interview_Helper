@@ -1,145 +1,103 @@
 import React from 'react';
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
-import { CHART_COLORS } from '../../utils/constants';
 import Card from '../common/Card';
 
-/**
- * Analytics Charts Component - Various visualizations for session analytics
- */
-const AnalyticsCharts = ({ analytics }) => {
-  if (!analytics) {
+const AnalyticsCharts = ({ timelineData }) => {
+  if (!timelineData) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        <p>No analytics data available</p>
-      </div>
+      <Card>
+        <p className="text-center text-gray-500 py-8">No timeline data available.</p>
+      </Card>
     );
   }
 
-  // Prepare data for charts
-  const performanceData = [
-    { metric: 'Communication', score: analytics.component_scores?.communication || 0 },
-    { metric: 'Confidence', score: analytics.component_scores?.confidence || 0 },
-    { metric: 'Content', score: analytics.component_scores?.content_quality || 0 },
-    { metric: 'Non-Verbal', score: analytics.component_scores?.non_verbal || 0 },
-    { metric: 'Vocal', score: analytics.component_scores?.vocal || 0 },
-  ];
+  // Build per-question data rows
+  const questionCount = Math.max(
+    timelineData.eye_contact?.length || 0,
+    timelineData.engagement?.length || 0,
+    timelineData.speaking_pace?.length || 0,
+    timelineData.answer_quality?.length || 0,
+  );
 
-  const metricsData = [
-    { name: 'Eye Contact', value: analytics.detailed_metrics?.avg_eye_contact || 0, fullMark: 100 },
-    { name: 'Speaking Pace', value: Math.min((analytics.detailed_metrics?.avg_speaking_pace || 150) / 2, 100), fullMark: 100 },
-    { name: 'Volume', value: analytics.detailed_metrics?.avg_volume || 0, fullMark: 100 },
-    { name: 'Engagement', value: analytics.detailed_metrics?.avg_engagement || 0, fullMark: 100 },
-    { name: 'Clarity', value: analytics.detailed_metrics?.avg_answer_clarity || 0, fullMark: 100 },
-  ];
+  const performanceData = Array.from({ length: questionCount }, (_, i) => ({
+    question: `Q${(timelineData.eye_contact?.[i]?.x || i + 1)}`,
+    'Eye Contact':   Math.round(timelineData.eye_contact?.[i]?.y   || 0),
+    'Engagement':    Math.round(timelineData.engagement?.[i]?.y    || 0),
+    'Answer Score':  Math.round(timelineData.answer_quality?.[i]?.y || 0),
+  }));
 
-  const COLORS = [CHART_COLORS.primary, CHART_COLORS.success, CHART_COLORS.warning, CHART_COLORS.danger, CHART_COLORS.info];
+  const audioData = Array.from({ length: questionCount }, (_, i) => ({
+    question: `Q${(timelineData.speaking_pace?.[i]?.x || i + 1)}`,
+    'Speaking Pace': Math.round(timelineData.speaking_pace?.[i]?.y  || 0),
+    'Volume':        Math.round(timelineData.volume?.[i]?.y         || 0),
+  }));
 
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-medium text-gray-900">{payload[0].name}</p>
-          <p className="text-sm text-gray-600">
-            Score: <span className="font-semibold">{payload[0].value}</span>
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+  const emotionData = (timelineData.emotion || []).map(e => ({
+    question: `Q${e.x}`,
+    emotion: e.dominant || 'neutral',
+  }));
 
   return (
-    <div className="space-y-6">
-      {/* Performance Breakdown - Bar Chart */}
-      <Card title="Performance Breakdown">
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={performanceData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="metric" stroke="#6b7280" />
-              <YAxis domain={[0, 100]} stroke="#6b7280" />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="score" fill={CHART_COLORS.primary} radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+    <div className="space-y-8">
+      {/* Performance over questions */}
+      <Card title="Performance Per Question">
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={performanceData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="question" />
+            <YAxis domain={[0, 100]} />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey="Eye Contact"  stroke="#3b82f6" strokeWidth={2} dot />
+            <Line type="monotone" dataKey="Engagement"   stroke="#22c55e" strokeWidth={2} dot />
+            <Line type="monotone" dataKey="Answer Score" stroke="#a855f7" strokeWidth={2} dot />
+          </LineChart>
+        </ResponsiveContainer>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Skills Radar Chart */}
-        <Card title="Skills Assessment">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={metricsData}>
-                <PolarGrid stroke="#e5e7eb" />
-                <PolarAngleAxis dataKey="name" stroke="#6b7280" />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#6b7280" />
-                <Radar name="Your Performance" dataKey="value" stroke={CHART_COLORS.primary} fill={CHART_COLORS.primary} fillOpacity={0.6} />
-                <Tooltip content={<CustomTooltip />} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+      {/* Audio metrics */}
+      <Card title="Speaking Metrics Per Question">
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={audioData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="question" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="Speaking Pace" fill="#f97316" />
+            <Bar dataKey="Volume"        fill="#06b6d4" />
+          </BarChart>
+        </ResponsiveContainer>
+        <p className="text-xs text-gray-400 mt-2 text-center">
+          Optimal speaking pace: 125–170 WPM
+        </p>
+      </Card>
 
-        {/* Score Distribution - Pie Chart */}
-        <Card title="Score Distribution">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={performanceData}
-                  dataKey="score"
-                  nameKey="metric"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                >
-                  {performanceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-
-      {/* Timeline Data if available */}
-      {analytics.timeline_data && analytics.timeline_data.answer_quality && (
-        <Card title="Performance Timeline">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={analytics.timeline_data.answer_quality}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="x" label={{ value: 'Question Number', position: 'insideBottom', offset: -5 }} stroke="#6b7280" />
-                <YAxis domain={[0, 100]} label={{ value: 'Score', angle: -90, position: 'insideLeft' }} stroke="#6b7280" />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Line type="monotone" dataKey="y" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ fill: CHART_COLORS.primary, r: 5 }} name="Answer Quality" />
-              </LineChart>
-            </ResponsiveContainer>
+      {/* Emotion timeline */}
+      {emotionData.length > 0 && (
+        <Card title="Emotion Per Question">
+          <div className="flex flex-wrap gap-3">
+            {emotionData.map((e, i) => {
+              const emotionColors = {
+                happy: 'bg-green-100 text-green-800',
+                neutral: 'bg-gray-100 text-gray-700',
+                sad: 'bg-blue-100 text-blue-800',
+                angry: 'bg-red-100 text-red-700',
+                fear: 'bg-orange-100 text-orange-700',
+                surprise: 'bg-yellow-100 text-yellow-800',
+                disgust: 'bg-purple-100 text-purple-700',
+                contempt: 'bg-pink-100 text-pink-700',
+              };
+              const cls = emotionColors[e.emotion] || 'bg-gray-100 text-gray-700';
+              return (
+                <div key={i} className={`px-3 py-2 rounded-lg text-sm font-medium ${cls}`}>
+                  {e.question}: {e.emotion}
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}

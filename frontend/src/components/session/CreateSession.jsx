@@ -76,22 +76,35 @@ const CreateSession = () => {
     setIsSubmitting(true);
 
     try {
-        // 🔥 FIX: Log to verify data is present
-        console.log('Form data before sending:', formData);
+      // Log to verify data is present
+      console.log('Form data before sending:', formData);
 
-        // Create session with correct field mapping
-        const response = await sessionService.createSession(
-        formData,  // ← Just pass the whole formData object
+      // Create session with correct field mapping
+      const response = await sessionService.createSession(
+        formData,
         formData.resume
-        );
+      );
 
-        // Navigate to interview page
-        navigate(`/interview/${response.id}`);
+      console.log('CreateSession response payload:', response);
+
+      // Be defensive about response shape
+      const sessionId =
+        response?.id ||
+        response?._id ||
+        response?.session_id ||
+        (typeof response === 'string' ? response : null);
+
+      if (!sessionId) {
+        throw new Error('Server did not return a session id. Please try again.');
+      }
+
+      // Navigate to interview page
+      navigate(`/interview/${sessionId}`);
     } catch (err) {
-        console.error('Error creating session:', err);
-        setApiError(getErrorMessage(err));
+      console.error('Error creating session:', err);
+      setApiError(getErrorMessage(err));
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
     };
 

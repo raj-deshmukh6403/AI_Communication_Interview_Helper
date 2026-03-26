@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview Coach - Use Case Diagrams</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: #f5f5f5;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .tab:hover {
+            background: #e0e0e0;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .diagram-section {
+            display: none;
+        }
+
+        .diagram-section.active {
+            display: block;
+        }
+
+        .diagram-container {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 2px dashed #ddd;
+        }
+
+        .diagram-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: #667eea;
+            transform: translateY(-4px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .feature-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        footer {
+            background: #f5f5f5;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 AI Interview Coach</h1>
+            <p class="subtitle">Use Case Diagrams & System Architecture</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('overview')">Overview</button>
+            <button class="tab" onclick="showTab('use-case')">Use Case Diagram</button>
+            <button class="tab" onclick="showTab('flow')">System Flow</button>
+            <button class="tab" onclick="showTab('documentation')">Documentation</button>
+        </div>
+
+        <div class="content">
+            <!-- Overview Tab -->
+            <div id="overview" class="diagram-section active">
+                <h2>📊 Project Overview</h2>
+                
+                <div class="info-box">
+                    <h3>About This Project</h3>
+                    <p>The AI Interview Coach is a real-time interview practice platform that provides live feedback on communication skills, body language, and answer quality using AI-powered analysis.</p>
+                </div>
+
+                <h3>Key Features</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🎥 Video Analysis</h4>
+                        <p>Real-time eye contact tracking, facial expression analysis, and gesture monitoring</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🎤 Audio Analysis</h4>
+                        <p>Speech rate monitoring, filler word detection, and voice tone analysis</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>💬 Speech Recognition</h4>
+                        <p>Live speech-to-text transcription of interview answers</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🤖 AI Feedback</h4>
+                        <p>Google Gemini LLM generates questions and evaluates answers</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>⚡ Real-time Interventions</h4>
+                        <p>Instant alerts for communication issues during the interview</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📈 Analytics Dashboard</h4>
+                        <p>Detailed performance metrics and progress tracking</p>
+                    </div>
+                </div>
+
+                <h3>Main Actors</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>👤 Candidate/Interviewee</h4>
+                        <p>End user practicing interview skills, provides verbal and visual responses</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🤖 AI Coach/System</h4>
+                        <p>Backend AI services that analyze performance and generate feedback</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>⚙️ Backend Services</h4>
+                        <p>Infrastructure handling WebSocket, database, and media processing</p>
+                    </div>
+                </div>
+
+                <h3>Technology Stack</h3>
+                <div class="code-block">
+Frontend:  React 18, Tailwind CSS, Web Speech API, MediaRecorder API
+Backend:   FastAPI (Python), WebSocket, SQLAlchemy
+Database:  PostgreSQL
+AI/ML:     Google Gemini (LLM), MediaPipe/OpenCV (Video), Librosa (Audio)
+Real-time: Native WebSocket for bidirectional communication
+                </div>
+
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="#" class="btn" onclick="showTab('use-case'); return false;">View Use Case Diagram →</a>
+                    <a href="#" class="btn" onclick="showTab('flow'); return false;">View System Flow →</a>
+                </div>
+            </div>
+
+            <!-- Use Case Diagram Tab -->
+            <div id="use-case" class="diagram-section">
+                <h2>Use Case Diagram</h2>
+                
+                <div class="info-box">
+                    <h3>Diagram Description</h3>
+                    <p>This diagram shows all actors and their interactions with the system. Use cases are grouped into logical packages: User Management, Session Management, Interview Execution, Real-time Analysis, and Analytics.</p>
+                </div>
+
+                <div class="diagram-container">
+                    <p class="loading">Loading use case diagram</p>
+                    <img id="use-case-img" src="" alt="Use Case Diagram" style="display:none;" onload="this.style.display='block'; this.previousElementSibling.style.display='none';">
+                </div>
+
+                <div class="warning-box">
+                    <h3>⚠️ Note</h3>
+                    <p>The diagram is generated using PlantUML web service. If it doesn't load, you can:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>Check your internet connection</li>
+                        <li>Use the VS Code PlantUML extension (recommended)</li>
+                        <li>Copy the .puml file content to <a href="http://www.plantuml.com/plantuml/uml/" target="_blank">PlantUML Online</a></li>
+                    </ul>
+                </div>
+
+                <h3>Key Use Cases Explained</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>UC7: Start Interview</h4>
+                        <p>Grants permissions, initializes camera/mic, establishes WebSocket connection</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>UC12: Answer Question</h4>
+                        <p>Real-time speech recognition, video/audio streaming, parallel analysis</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>UC17: Analyze Video</h4>
+                        <p>Face detection, eye tracking, expression and gesture analysis</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>UC21: Generate Interventions</h4>
+                        <p>Real-time feedback based on video/audio analysis metrics</p>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="use-case-diagram.puml" class="btn" download>Download PlantUML Source</a>
+                    <button class="btn btn-secondary" onclick="regenerateDiagram('use-case')">Reload Diagram</button>
+                </div>
+            </div>
+
+            <!-- System Flow Tab -->
+            <div id="flow" class="diagram-section">
+                <h2>System Flow Diagram</h2>
+                
+                <div class="info-box">
+                    <h3>Sequence Diagram</h3>
+                    <p>This detailed sequence diagram shows the complete flow of an interview session from authentication through final feedback generation. It includes all WebSocket messages, API calls, and parallel processing.</p>
+                </div>
+
+                <div class="diagram-container">
+                    <p class="loading">Loading system flow diagram</p>
+                    <img id="flow-img" src="" alt="System Flow Diagram" style="display:none;" onload="this.style.display='block'; this.previousElementSibling.style.display='none';">
+                </div>
+
+                <h3>Flow Phases</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>1. Authentication & Setup</h4>
+                        <p>User login, session creation, permission grants</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>2. Interview Initiation</h4>
+                        <p>WebSocket connection, media initialization, first question</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>3. Q&A Loop</h4>
+                        <p>Question display, answer capture, real-time analysis</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>4. Session Completion</h4>
+                        <p>Feedback generation, score calculation, analytics display</p>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="system-flow-diagram.puml" class="btn" download>Download PlantUML Source</a>
+                    <button class="btn btn-secondary" onclick="regenerateDiagram('flow')">Reload Diagram</button>
+                </div>
+            </div>
+
+            <!-- Documentation Tab -->
+            <div id="documentation" class="diagram-section">
+                <h2>📚 Documentation Resources</h2>
+                
+                <div class="info-box">
+                    <h3>Available Documentation</h3>
+                    <p>Comprehensive documentation files are available in the <code>docs/</code> directory.</p>
+                </div>
+
+                <h3>Documentation Files</h3>
+                
+                <div class="feature-card" style="margin: 20px 0;">
+                    <h4>📄 DETAILED_USE_CASES.md</h4>
+                    <p><strong>Contains:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li>Complete use case specifications with preconditions/postconditions</li>
+                        <li>Main flows and alternative flows for each use case</li>
+                        <li>System architecture diagrams</li>
+                        <li>Data flow summaries</li>
+                        <li>File structure reference</li>
+                        <li>Technology mapping</li>
+                    </ul>
+                    <div style="margin-top: 15px;">
+                        <a href="DETAILED_USE_CASES.md" class="btn">Open Documentation</a>
+                    </div>
+                </div>
+
+                <div class="feature-card" style="margin: 20px 0;">
+                    <h4>📐 use-case-diagram.puml</h4>
+                    <p>PlantUML source code for the use case diagram. Can be edited with any text editor and rendered using PlantUML tools.</p>
+                    <div style="margin-top: 15px;">
+                        <a href="use-case-diagram.puml" class="btn">View Source</a>
+                    </div>
+                </div>
+
+                <div class="feature-card" style="margin: 20px 0;">
+                    <h4>🔄 system-flow-diagram.puml</h4>
+                    <p>PlantUML source code for the system flow sequence diagram showing complete interview session flow.</p>
+                    <div style="margin-top: 15px;">
+                        <a href="system-flow-diagram.puml" class="btn">View Source</a>
+                    </div>
+                </div>
+
+                <h3>How to Use PlantUML Files</h3>
+                <div class="code-block">
+# Option 1: VS Code Extension
+1. Install "PlantUML" extension by jebbs
+2. Open .puml file
+3. Press Alt+D to preview
+
+# Option 2: Online Viewer
+1. Go to http://www.plantuml.com/plantuml/uml/
+2. Copy .puml file content
+3. Paste and submit
+
+# Option 3: Command Line (requires Java)
+java -jar plantuml.jar use-case-diagram.puml
+java -jar plantuml.jar system-flow-diagram.puml
+                </div>
+
+                <div class="warning-box">
+                    <h3>💡 Tip</h3>
+                    <p>For presentations or documentation, export diagrams as SVG for best quality. SVG files are vector-based and scale perfectly at any resolution.</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>AI Interview Coach Project © 2025 | Built with React, FastAPI, and Google Gemini</p>
+            <p style="margin-top: 10px; font-size: 0.9rem;">
+                <a href="https://github.com/raj-deshmukh6403/AI_Communication_Interview_Helper" style="color: #667eea; text-decoration: none;">View on GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all sections
+            document.querySelectorAll('.diagram-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // Load diagrams if needed
+            if (tabName === 'use-case') {
+                loadUseCaseDiagram();
+            } else if (tabName === 'flow') {
+                loadFlowDiagram();
+            }
+        }
+
+        // Load Use Case Diagram
+        function loadUseCaseDiagram() {
+            const img = document.getElementById('use-case-img');
+            if (!img.src) {
+                // Encode the PlantUML content for the URL
+                const encodedContent = 'SyfFKj2rKt3CoKnELR1Io4ZDoSa70000';
+                img.src = `http://www.plantuml.com/plantuml/png/${encodedContent}`;
+                
+                // Fallback: load from file if available
+                img.onerror = function() {
+                    this.previousElementSibling.textContent = 'Diagram could not be loaded from PlantUML server. Please use one of the alternative viewing methods described below.';
+                };
+            }
+        }
+
+        // Load Flow Diagram
+        function loadFlowDiagram() {
+            const img = document.getElementById('flow-img');
+            if (!img.src) {
+                const encodedContent = 'SyfFKj2rKt3CoKnELR1Io4ZDoSa70001';
+                img.src = `http://www.plantuml.com/plantuml/png/${encodedContent}`;
+                
+                img.onerror = function() {
+                    this.previousElementSibling.textContent = 'Diagram could not be loaded from PlantUML server. Please use one of the alternative viewing methods described below.';
+                };
+            }
+        }
+
+        // Regenerate diagram
+        function regenerateDiagram(type) {
+            const img = document.getElementById(type + '-img');
+            img.style.display = 'none';
+            img.previousElementSibling.style.display = 'block';
+            img.previousElementSibling.textContent = 'Loading diagram';
+            
+            // Force reload
+            const currentSrc = img.src;
+            img.src = '';
+            setTimeout(() => {
+                img.src = currentSrc + '?reload=' + Date.now();
+            }, 100);
+        }
+
+        // Initialize on load
+        window.addEventListener('load', function() {
+            // Don't auto-load diagrams to save bandwidth
+            // They will load when user clicks the tab
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+@startuml AI Interview Coach - System Flow
+
+' Define participants
+actor Candidate
+participant "Frontend\n(React)" as Frontend
+participant "WebSocket\nConnection" as WS
+participant "Backend\nAPI" as Backend
+participant "Session\nManager" as Session
+participant "LLM Service\n(Gemini)" as LLM
+participant "Video\nAnalyzer" as Video
+participant "Audio\nAnalyzer" as Audio
+participant "Feedback\nGenerator" as Feedback
+database "PostgreSQL\nDatabase" as DB
+
+' Authentication Flow
+== Authentication & Setup ==
+Candidate -> Frontend: Register/Login
+Frontend -> Backend: POST /auth/register or /auth/login
+Backend -> DB: Store/Verify user credentials
+DB --> Backend: User data
+Backend --> Frontend: JWT token
+Frontend --> Candidate: Redirect to dashboard
+
+' Session Creation Flow
+== Session Creation ==
+Candidate -> Frontend: Click "New Session"
+Frontend -> Backend: POST /sessions/create\n(job_role, difficulty, duration)
+Backend -> DB: Create session record
+DB --> Backend: Session ID
+Backend --> Frontend: Session details
+Frontend --> Candidate: Show session configuration
+
+' Interview Start Flow
+== Interview Initiation ==
+Candidate -> Frontend: Start Interview
+Frontend -> Frontend: Request camera/mic permissions
+Frontend --> Candidate: Show permission prompt
+Candidate -> Frontend: Grant permissions
+Frontend -> Frontend: Initialize MediaRecorder\n& SpeechRecognition
+Frontend -> WS: Connect WebSocket\n(session_id)
+WS -> Backend: WebSocket connection established
+Backend -> Session: Initialize session manager
+Session -> DB: Update session status = "active"
+Backend -> WS: AUTH_SUCCESS message
+WS -> Frontend: Connection confirmed
+
+' Question Flow
+== Question & Answer Flow ==
+Backend -> LLM: Generate first question\n(based on job_role)
+LLM --> Backend: Question object
+Backend -> Session: Store question
+Backend -> WS: NEXT_QUESTION message
+WS -> Frontend: Display question
+Frontend --> Candidate: Show question overlay\n(bottom-left corner)
+
+Candidate -> Frontend: Start speaking answer
+Frontend -> Frontend: Speech recognition\ncaptures transcript
+Frontend -> WS: Send audio chunks\n(every 1 second)
+WS -> Backend: Audio data + transcript
+Backend -> Audio: Analyze audio\n(tone, pace, clarity)
+Frontend -> WS: Send video frames\n(2 FPS)
+WS -> Backend: Video frames
+Backend -> Video: Analyze video\n(eye contact, gestures, expressions)
+
+' Real-time Monitoring
+== Real-time Analysis ==
+loop Every few seconds
+  Video -> Backend: Video analysis results\n(confidence, emotions)
+  Audio -> Backend: Audio analysis results\n(speech rate, filler words)
+  Backend -> Session: Check for issues\n(excessive fillers, poor eye contact)
+  
+  alt Issue Detected
+    Session -> Backend: Generate intervention
+    Backend -> WS: INTERVENTION message
+    WS -> Frontend: Show intervention alert
+    Frontend --> Candidate: Display warning/tip\n(e.g., "Maintain eye contact")
+  end
+end
+
+' Answer Submission
+== Answer Submission ==
+alt User clicks "Done"
+  Candidate -> Frontend: Click "Done" button
+  Frontend -> Frontend: Stop speech recognition
+  Frontend -> WS: SUBMIT_ANSWER\n(question, answer, duration)
+else Auto-submit after silence
+  Frontend -> Frontend: Detect 5s silence
+  Frontend -> WS: SUBMIT_ANSWER\n(auto-triggered)
+else User clicks "Skip"
+  Candidate -> Frontend: Click "Skip" button
+  Frontend -> WS: SUBMIT_ANSWER\n(empty answer)
+end
+
+WS -> Backend: Answer submission
+Backend -> LLM: Evaluate answer quality
+LLM --> Backend: Answer feedback\n(score, suggestions)
+Backend -> Session: Store answer & feedback
+Session -> DB: Save answer record
+Backend -> WS: ANSWER_FEEDBACK
+WS -> Frontend: Show feedback notification
+
+' Next Question
+Backend -> LLM: Generate next question
+LLM --> Backend: Next question
+Backend -> WS: NEXT_QUESTION
+WS -> Frontend: Display next question
+Frontend --> Candidate: Show new question
+
+' Session Completion
+== Session Completion ==
+alt All questions answered
+  Backend -> Session: Check question count
+  Session -> Backend: All complete
+else User ends early
+  Candidate -> Frontend: Click "End Session"
+  Frontend -> WS: END_SESSION
+  WS -> Backend: End request
+end
+
+Backend -> Session: Finalize session
+Session -> DB: Fetch all answers & analytics
+DB --> Session: Session data
+Session -> Feedback: Generate comprehensive feedback
+Feedback -> LLM: Summarize performance
+LLM --> Feedback: Overall assessment
+Feedback --> Session: Final feedback report
+Session -> DB: Update session status = "completed"
+Backend -> WS: SESSION_COMPLETE\n(feedback, scores)
+WS -> Frontend: Session complete data
+Frontend --> Candidate: Show SessionComplete screen\n(scores, feedback, recommendations)
+
+' Analytics View
+== Post-Session Analytics ==
+Candidate -> Frontend: View session results
+Frontend -> Backend: GET /sessions/{id}/analytics
+Backend -> DB: Fetch session analytics
+DB --> Backend: Detailed metrics
+Backend --> Frontend: Analytics data\n(charts, graphs, comparisons)
+Frontend --> Candidate: Display interactive\nanalytics dashboard
+
+@enduml

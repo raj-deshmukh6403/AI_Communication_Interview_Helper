@@ -2,6 +2,7 @@
 fastapi==0.104.1
 pydantic==2.7.1
 pydantic-settings==2.1.0
+pydantic[email]
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 websockets==12.0
@@ -19,16 +20,14 @@ python-dotenv==1.0.0
 # Computer Vision & Emotion Recognition
 opencv-python==4.8.1.78
 opencv-python-headless==4.8.1.78
-deepface==0.0.79
-tf-keras==2.15.0
-tensorflow==2.15.0
+hsemotion-onnx
 
 # AI/ML Libraries
 mediapipe==0.10.21
 numpy>=1.26,<1.27
 librosa==0.10.1
 soundfile==0.12.1
-openai-whisper==20231117
+#openai-whisper==20231117
 
 
 # LLM Integration (using free Groq API)

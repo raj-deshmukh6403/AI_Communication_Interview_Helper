@@ -34,11 +34,17 @@ const SessionCard = ({ session, onDelete }) => {
     <Card className="hover:shadow-lg transition-shadow" padding="md">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+          {/* <h3 className="text-lg font-semibold text-gray-900 mb-1">
             {session.position}
           </h3>
           {session.company_name && (
             <p className="text-sm text-gray-600 mb-2">{session.company_name}</p>
+          )} */}
+          <h3 className="font-semibold text-gray-900 text-sm leading-tight">
+             {session.session_name || session.position}
+          </h3>
+          {session.session_name && (
+            <p className="text-xs text-gray-500">{session.position}</p>
           )}
         </div>
         

@@ -16,6 +16,7 @@ const useMediaRecorder = () => {
   const frameIntervalRef = useRef(null);
   const audioCallbackRef = useRef(null);
   const streamRef = useRef(null);
+  const cameraEnabledRef = useRef(true);
 
   // Guard so we don't call getUserMedia concurrently
   const isRequestingRef = useRef(false);
@@ -203,7 +204,9 @@ const useMediaRecorder = () => {
         console.log(`📸 Capturing frames every ${frameInterval}ms (${fps} FPS)`);
         
         frameIntervalRef.current = setInterval(() => {
-          if (videoRef.current && isCameraEnabled) {
+          // Use ref so we always see the latest camera state,
+          // even inside this interval callback.
+          if (videoRef.current && cameraEnabledRef.current) {
             const frameData = mediaService.captureFrame(videoRef.current);
             if (frameData) {
               onVideoFrame(frameData);
@@ -226,7 +229,7 @@ const useMediaRecorder = () => {
       setIsRecording(false);
       return false;
     }
-  }, [isCameraEnabled]);
+  }, []);
 
   /**
    * Stop recording
@@ -257,6 +260,7 @@ const useMediaRecorder = () => {
       if (videoTrack) {
         videoTrack.enabled = enabled;
         setIsCameraEnabled(enabled);
+        cameraEnabledRef.current = enabled;
         console.log(`✅ Camera ${enabled ? 'enabled' : 'disabled'}`);
         return true;
       }

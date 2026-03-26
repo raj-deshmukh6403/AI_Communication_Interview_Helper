@@ -110,6 +110,38 @@ const FeedbackReport = ({ feedback, onDownload }) => {
         </Card>
       )}
 
+      {/* right now new code */}
+      {/* Emotion breakdown */}
+      {feedback.detailed_metrics?.dominant_emotion && (
+        <Card title="😊 Emotional Profile">
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <p className="text-xs text-gray-500 mb-1">Dominant Emotion</p>
+              <p className="text-xl font-bold capitalize">{feedback.detailed_metrics.dominant_emotion || 'neutral'}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-500 mb-1">Avg Eye Contact</p>
+              <p className={`text-xl font-bold ${getScoreColor(feedback.detailed_metrics.avg_eye_contact)}`}>
+                {Math.round(feedback.detailed_metrics.avg_eye_contact || 0)}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-500 mb-1">Avg Engagement</p>
+              <p className={`text-xl font-bold ${getScoreColor(feedback.detailed_metrics.avg_engagement)}`}>
+                {Math.round(feedback.detailed_metrics.avg_engagement || 0)}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-500 mb-1">Avg Answer Score</p>
+              <p className={`text-xl font-bold ${getScoreColor(feedback.detailed_metrics.avg_llm_score)}`}>
+                {Math.round(feedback.detailed_metrics.avg_llm_score || 0)}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+      {/* end of right now new code */}
+
       {/* Next Steps */}
       <Card title="📚 Recommended Next Steps" className="bg-gradient-to-br from-blue-50 to-indigo-50">
         <ul className="space-y-3">
