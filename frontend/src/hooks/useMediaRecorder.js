@@ -16,7 +16,7 @@ const useMediaRecorder = () => {
   const frameIntervalRef = useRef(null);
   const audioCallbackRef = useRef(null);
   const streamRef = useRef(null);
-  const cameraEnabledRef = useRef(true);
+  const attachCheckIntervalRef = useRef(null);
 
   // Guard so we don't call getUserMedia concurrently
   const isRequestingRef = useRef(false);
@@ -143,43 +143,54 @@ const useMediaRecorder = () => {
   }, []);
 
   /**
-   * 🔥 FIX: Attach stream to video element and force play
+   * Keep stream attached even if <video> mounts late or rerenders.
    */
   useEffect(() => {
-    if (stream && videoRef.current) {
-      console.log('🔗 Attaching stream to video element...');
-      
+    if (!stream) return undefined;
+
+    let cancelled = false;
+
+    const attachAndPlay = () => {
+      if (cancelled) return false;
       const video = videoRef.current;
-      video.srcObject = stream;
-      
-      // Force attributes
+      if (!video) return false;
+
+      if (video.srcObject !== stream) {
+        console.log('🔗 Attaching stream to video element...');
+        video.srcObject = stream;
+      }
+
       video.muted = true;
       video.autoplay = true;
       video.playsInline = true;
-      
-      // Aggressive play attempts
-      const tryPlay = () => {
-        if (video.paused) {
-          video.play()
-            .then(() => console.log('✅ Video playing'))
-            .catch(err => console.warn('⚠️ Play blocked:', err && err.message ? err.message : err));
-        }
-      };
-      
-      // Try multiple times
-      setTimeout(tryPlay, 100);
-      setTimeout(tryPlay, 500);
-      setTimeout(tryPlay, 1000);
-      
-      // Event listeners
-      video.addEventListener('loadedmetadata', tryPlay);
-      video.addEventListener('canplay', tryPlay);
-      
-      return () => {
-        video.removeEventListener('loadedmetadata', tryPlay);
-        video.removeEventListener('canplay', tryPlay);
-      };
+
+      if (video.paused) {
+        video.play().catch((err) => {
+          console.warn('⚠️ Play blocked:', err && err.message ? err.message : err);
+        });
+      }
+
+      return true;
+    };
+
+    // Immediate attach attempt
+    attachAndPlay();
+
+    // Persistent safety-net for delayed refs/rerenders
+    if (attachCheckIntervalRef.current) {
+      clearInterval(attachCheckIntervalRef.current);
     }
+    attachCheckIntervalRef.current = setInterval(() => {
+      attachAndPlay();
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      if (attachCheckIntervalRef.current) {
+        clearInterval(attachCheckIntervalRef.current);
+        attachCheckIntervalRef.current = null;
+      }
+    };
   }, [stream]);
 
   /**
@@ -204,9 +215,7 @@ const useMediaRecorder = () => {
         console.log(`📸 Capturing frames every ${frameInterval}ms (${fps} FPS)`);
         
         frameIntervalRef.current = setInterval(() => {
-          // Use ref so we always see the latest camera state,
-          // even inside this interval callback.
-          if (videoRef.current && cameraEnabledRef.current) {
+          if (videoRef.current && isCameraEnabled) {
             const frameData = mediaService.captureFrame(videoRef.current);
             if (frameData) {
               onVideoFrame(frameData);
@@ -229,7 +238,7 @@ const useMediaRecorder = () => {
       setIsRecording(false);
       return false;
     }
-  }, []);
+  }, [isCameraEnabled]);
 
   /**
    * Stop recording
@@ -260,7 +269,6 @@ const useMediaRecorder = () => {
       if (videoTrack) {
         videoTrack.enabled = enabled;
         setIsCameraEnabled(enabled);
-        cameraEnabledRef.current = enabled;
         console.log(`✅ Camera ${enabled ? 'enabled' : 'disabled'}`);
         return true;
       }
@@ -327,6 +335,10 @@ const useMediaRecorder = () => {
     return () => {
       console.log('🧹 Cleaning up media recorder...');
       stopRecording();
+      if (attachCheckIntervalRef.current) {
+        clearInterval(attachCheckIntervalRef.current);
+        attachCheckIntervalRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
           track.stop();
@@ -363,3 +375,4 @@ const useMediaRecorder = () => {
 };
 
 export default useMediaRecorder;
+
