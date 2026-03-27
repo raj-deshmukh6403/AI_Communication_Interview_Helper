@@ -44,10 +44,21 @@ class ConnectionManager:
         self.active_connections: Dict[str, WebSocket] = {}
 
     async def connect(self, session_id: str, websocket: WebSocket):
+        
+        # ← ADD THIS: close existing connection if any
+        if session_id in self.active_connections:
+            try:
+                old_ws = self.active_connections[session_id]
+                await old_ws.close(code=1000, reason="Replaced by new connection")
+            except Exception:
+                pass
+            del self.active_connections[session_id]
+            
         """Accept and store WebSocket connection."""
         await websocket.accept()
         self.active_connections[session_id] = websocket
-        session_monitors[session_id] = RealTimeMonitor()
+        if session_id not in session_monitors:   # ← only create if not exists
+          session_monitors[session_id] = RealTimeMonitor()
         print(f"WebSocket connected for session: {session_id}")
 
     def disconnect(self, session_id: str):
@@ -171,6 +182,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
         # ── Main message loop ─────────────────────────────────────────────────
         while True:
             data         = await websocket.receive_text()
+            print(f"[DEBUG] Raw message received, length: {len(data)}, starts with: {data[:50]}")
             message      = json.loads(data)
             message_type = message.get("type")
 
@@ -228,11 +240,14 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
 
             # ── Video frame ───────────────────────────────────────────────────
             if message_type == "video_frame":
+                print(f"[DEBUG] video_frame received")   # ← ADD
                 if session_id not in session_monitors:
+                    print(f"[DEBUG] no monitor found!")  # ← ADD
                     continue
 
                 monitor    = session_monitors[session_id]
                 frame_data = message.get("data")
+                print(f"[DEBUG] frame_data length: {len(frame_data) if frame_data else 0}")  # ← ADD
                 user_first = current_user.get("full_name", "there").split()[0] \
                              if current_user else "there"
 
@@ -240,11 +255,15 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                     video_frame=frame_data,
                     user_name=user_first,
                 )
-
+                # Temporarily add this before BOTH send_message calls:
+                print(f"[ANALYTICS SEND] video keys: {list(analysis.get('video_analysis', {}).keys())}, warnings: {analysis.get('warnings', [])}")
+                # video_frame handler — send consistent shape
                 await manager.send_message(session_id, {
                     "type": "analytics",
                     "data": {
-                        "video":     analysis["video_analysis"],
+                        "video":     analysis.get("video_analysis", {}),
+                        "audio":     {},                              # ← add empty audio
+                        "warnings":  analysis.get("warnings", []),   # ← add warnings
                         "timestamp": analysis["timestamp"],
                     },
                 })
@@ -258,6 +277,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
 
             # ── Audio chunk ───────────────────────────────────────────────────
             elif message_type == "audio_chunk":
+                print(f"[DEBUG] audio_chunk received")  # ← ADD
                 if session_id not in session_monitors:
                     continue
 
@@ -273,16 +293,20 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                     transcript=transcript,
                     user_name=user_first,
                 )
+                
+                # Temporarily add this before BOTH send_message calls:
+                print(f"[ANALYTICS SEND] video keys: {list(analysis.get('video_analysis', {}).keys())}, warnings: {analysis.get('warnings', [])}")
 
-                await manager.send_message(session_id, {
-                    "type": "analytics",
-                    "data": {
-                        "video":     analysis["video_analysis"],
-                        "audio":     analysis["audio_analysis"],
-                        #"warnings":  analysis.get("warnings", []),
-                        "timestamp": analysis["timestamp"],
-                    },
-                })
+                if analysis.get("audio_analysis"):
+                     await manager.send_message(session_id, {
+                        "type": "analytics",
+                        "data": {
+                            "video":    analysis.get("video_analysis", {}),
+                            "audio":    analysis["audio_analysis"],
+                            "warnings": analysis.get("warnings", []),
+                            "timestamp": analysis["timestamp"],
+                        },
+                     })
 
                 if analysis.get("intervention"):
                     await manager.send_message(session_id, {

@@ -55,7 +55,7 @@ export const WS_MESSAGE_TYPES = {
 export const VIDEO_SETTINGS = {
   WIDTH: 640,
   HEIGHT: 480,
-  FPS: parseInt(process.env.REACT_APP_VIDEO_FPS) || 2, // Frames per second to send
+  FPS: parseInt(process.env.REACT_APP_VIDEO_FPS) || 4, // Frames per second to send
   QUALITY: 0.7, // JPEG quality
 };
 

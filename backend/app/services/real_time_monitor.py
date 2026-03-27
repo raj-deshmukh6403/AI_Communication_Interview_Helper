@@ -35,7 +35,7 @@ class RealTimeMonitor:
         self.llm_service    = LLMService()
 
         # Thresholds for triggering real-time interventions
-        self.intervention_cooldown  = 15  # seconds between interventions
+        self.intervention_cooldown  = 30# seconds between interventions
         self.last_intervention_time = None
 
         # Track issues across frames
@@ -214,14 +214,14 @@ class RealTimeMonitor:
             if issue in issues:
                 self.issue_counters[issue] += 1
             else:
-                self.issue_counters[issue] = max(0, self.issue_counters[issue] - 1)
+                self.issue_counters[issue] = max(0, self.issue_counters[issue] - 2)
 
         # Check if any issue exceeds threshold
         for issue, count in self.issue_counters.items():
             threshold = self.intervention_thresholds.get(issue, 10)
             if count >= threshold:
                 intervention = self._create_intervention(issue, user_name)
-                self.issue_counters[issue] = 0
+                self.issue_counters[issue] = -5
                 self.last_intervention_time = datetime.utcnow()
                 return intervention
 

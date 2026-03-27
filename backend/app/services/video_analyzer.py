@@ -61,7 +61,7 @@ HEAD_VERT_UP_THRESH   = 0.59   # v_off < -this  → looking_up
 EAR_CLOSED_THRESH = 0.15
 
 # Emotion analysis frame interval (every Nth processed frame)
-EMOTION_FRAME_INTERVAL = 5
+EMOTION_FRAME_INTERVAL = 1
 
 
 # ─────────────────────────── VideoAnalyzer ───────────────────────────────────
@@ -103,6 +103,24 @@ class VideoAnalyzer:
         self.frame_count         = 0      # processed frames (after skip)
         self.skip_counter        = 0
         self.frame_skip_rate     = 2      # process every 2nd frame
+        
+        # In __init__, add:
+        self._consecutive_issues: Dict[str, int] = {}
+        # ADD:
+        self._warning_thresholds = {
+            "looking_down":       2,   # fast — 2 frames
+            "looking_up":         2,   # fast
+            "head_turned_left":   1,   # instant
+            "head_turned_right":  1,   # instant
+            "eyes_closed":        1,   # instant
+            "poor_eye_contact":   5,   # slower — avoid false positives
+            "excessive_movement": 3,
+            "low_engagement":     8,   # slow — needs sustained distraction
+            "nervous":            6,
+            "low_energy":         6,
+            "negative_expression":6,
+            "showing_nervousness":6,
+        }
 
         # Emotion history (kept for nervousness detection + session summary)
         self.emotion_history: List[Dict] = []
@@ -318,6 +336,7 @@ class VideoAnalyzer:
         self._nervousness_hits     = 0
         self._issue_counts         = {}
         self._last_analysis        = None
+        self._consecutive_issues = {}
 
     # ─────────────────────────── Private helpers ─────────────────────────────
 
@@ -512,57 +531,62 @@ class VideoAnalyzer:
         return max(0.0, min(100.0, round(s, 1)))
 
     def _detect_issues(self, a: Dict[str, Any]):
-        """
-        Produce issues list (for real_time_monitor counters) and
-        warnings list (for WebSocket → frontend camera overlay).
-        """
         issues:   List[str] = []
         warnings: List[str] = []
 
-        if a["eye_contact_score"] < 30:
-            issues.append("poor_eye_contact")
-            warnings.append("Look directly at the camera")
+        # Map of issue_key → warning message
+        checks = []
 
+        if a["eye_contact_score"] < 30:
+            checks.append(("poor_eye_contact", "Look directly at the camera"))
         if a.get("gaze_direction") == "closed":
-            issues.append("eyes_closed")
-            warnings.append("Keep your eyes open and look at the camera")
+            checks.append(("eyes_closed", "Keep your eyes open and look at the camera"))
 
         pos = a["head_position"]
         if pos == "looking_down":
-            issues.append("looking_down")
-            warnings.append("Keep your head up and look at the camera")
+            checks.append(("looking_down", "Keep your head up and look at the camera"))
         elif pos == "looking_up":
-            issues.append("looking_up")
-            warnings.append("Lower your gaze to camera level")
+            checks.append(("looking_up", "Lower your gaze to camera level"))
         elif pos == "turned_left":
-            issues.append("head_turned")
-            warnings.append("Face the camera directly — you're turned left")
+            checks.append(("head_turned_left", "Face the camera — you're turned left"))
         elif pos == "turned_right":
-            issues.append("head_turned")
-            warnings.append("Face the camera directly — you're turned right")
+            checks.append(("head_turned_right", "Face the camera — you're turned right"))
 
         if a.get("movement_intensity", 0) >= 2:
-            issues.append("excessive_movement")
-            warnings.append("Keep your head steady — excessive movement shows nervousness")
+            checks.append(("excessive_movement", "Keep your head steady"))
 
         if a["engagement_score"] < 50:
-            issues.append("low_engagement")
-            warnings.append("Stay focused — you seem distracted")
+            checks.append(("low_engagement", "Stay focused — you seem distracted"))
 
         emo = a.get("dominant_emotion", "neutral")
         if emo in ["fear", "surprise"]:
-            issues.append("nervous")
-            warnings.append("Take a deep breath — you're doing great!")
+            checks.append(("nervous", "Take a deep breath — you're doing great!"))
         elif emo == "sad":
-            issues.append("low_energy")
-            warnings.append("Try to project more energy and enthusiasm")
+            checks.append(("low_energy", "Try to project more energy and enthusiasm"))
         elif emo == "angry":
-            issues.append("negative_expression")
-            warnings.append("Relax your expression — try to look calm and confident")
+            checks.append(("negative_expression", "Relax your expression"))
 
         if len(a.get("nervousness_indicators", [])) >= 2:
-            issues.append("showing_nervousness")
-            warnings.append("You seem nervous — breathe and take your time")
+            checks.append(("showing_nervousness", "You seem nervous — breathe and take your time"))
+
+        # Track consecutive frames per issue
+        active_issues = {c[0] for c in checks}
+        
+        for issue_key, warning_msg in checks:
+            issues.append(issue_key)
+            # Increment consecutive counter
+            self._consecutive_issues[issue_key] = \
+                self._consecutive_issues.get(issue_key, 0) + 1
+            # Only warn after N consecutive frames
+            print(f"[DEBUG] {issue_key}: count={self._consecutive_issues[issue_key]}, threshold={self._warning_thresholds.get(issue_key, 3)}")  # ← ADD
+            threshold = self._warning_thresholds.get(issue_key, 3)
+            if self._consecutive_issues[issue_key] >= threshold:
+                warnings.append(warning_msg)
+
+        # Reset counters for issues NOT present this frame
+        for key in list(self._consecutive_issues.keys()):
+            if key not in active_issues:
+                self._consecutive_issues[key] = 0  # ← instant reset when stable
 
         return issues, warnings
 

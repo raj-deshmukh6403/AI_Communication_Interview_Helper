@@ -11,6 +11,7 @@ const useWebSocket = (sessionId) => {
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
   const handlersRef = useRef({});
+  const isConnectedRef = useRef(false);
 
   /**
    * Connect to WebSocket
@@ -25,6 +26,7 @@ const useWebSocket = (sessionId) => {
       await websocketService.connect(
         sessionId,
         () => {
+          isConnectedRef.current = true;   // ← ADD
           setIsConnected(true);
           setConnectionState('OPEN');
           setError(null);
@@ -106,6 +108,8 @@ const useWebSocket = (sessionId) => {
   useEffect(() => {
     const interval = setInterval(() => {
       const state = websocketService.getReadyState();
+      const connected = state === 'OPEN';
+      isConnectedRef.current = connected;
       setConnectionState(state);
       setIsConnected(state === 'OPEN');
     }, 1000);
@@ -127,6 +131,7 @@ const useWebSocket = (sessionId) => {
 
   return {
     isConnected,
+    isConnectedRef,
     connectionState,
     error,
     messages,

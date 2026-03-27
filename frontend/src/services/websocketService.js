@@ -17,6 +17,17 @@ class WebSocketService {
    */
   connect(sessionId, onOpen, onError) {
     return new Promise((resolve, reject) => {
+
+      // ← ADD THIS GUARD
+      if (this.ws && 
+          (this.ws.readyState === WebSocket.OPEN || 
+          this.ws.readyState === WebSocket.CONNECTING)) {
+        console.log('⚠️ WebSocket already connected, skipping duplicate connect');
+        if (onOpen) onOpen();
+        resolve();
+        return;
+      }
+      
       this.sessionId = sessionId;
       this.isIntentionallyClosed = false;
       let isSettled = false;
@@ -173,6 +184,7 @@ class WebSocketService {
   handleMessage(data) {
     try {
       const message = JSON.parse(data);
+      console.log('📨 WS IN:', message.type);  // ← ADD THIS LINE
       const messageType = message.type;
       
       // Call registered handler for this message type
@@ -287,7 +299,7 @@ class WebSocketService {
     }
     
     // Clear all handlers
-    this.messageHandlers = {};
+    //this.messageHandlers = {};
   }
 
   /**

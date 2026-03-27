@@ -27,6 +27,7 @@ const InterviewSession = ({ sessionId }) => {
 
   const {
     isConnected,
+    isConnectedRef,
     connect,
     disconnect,
     on,
@@ -104,10 +105,15 @@ const InterviewSession = ({ sessionId }) => {
   const isStartingRef = useRef(false);
   // right now new code
   const frameCounterRef = useRef(0);
+  const isConnectingRef = useRef(false);  // ← add this ref
+  const isSessionStartedRef = useRef(false);
   // end of right now new code
 
   useEffect(() => {
     const init = async () => {
+
+      if (isConnectingRef.current) return; 
+      isConnectingRef.current = true;
       try {
         setError(null);
         console.log('🚀 Starting initialization...');
@@ -122,6 +128,7 @@ const InterviewSession = ({ sessionId }) => {
         
         setIsInitialized(true);
       } catch (err) {
+        isConnectingRef.current = false; 
         console.error('❌ Initialization error:', err);
         setError(getErrorMessage(err));
       }
@@ -215,6 +222,7 @@ const InterviewSession = ({ sessionId }) => {
     };
 
     const handleAnalytics = (message) => {
+      console.log('🎭 handleAnalytics FIRED:', JSON.stringify(message).slice(0, 200));
       const data = message.data || {};
       
       // Extract emotion from video analysis
@@ -232,10 +240,13 @@ const InterviewSession = ({ sessionId }) => {
         lastUpdated: data.timestamp || new Date().toISOString(),
       }));
 
-      const warnings = message?.data?.video?.warnings || [];
+      const warnings = data.warnings || [];
       if (warnings.length > 0) {
         setLiveWarnings(warnings);
-        setTimeout(() => setLiveWarnings([]), 4000);
+        setTimeout(() => setLiveWarnings([]), 6000);
+      }
+      else{
+        setLiveWarnings([]);
       }
     };
 
@@ -416,6 +427,7 @@ const InterviewSession = ({ sessionId }) => {
     if (started) {
       console.log('✅ Recording started successfully');
       setIsSessionStarted(true);
+      isSessionStartedRef.current = true; 
       
       if (isSpeechSupported) {
         setTimeout(() => {
@@ -441,15 +453,17 @@ const InterviewSession = ({ sessionId }) => {
     // }
     //right now new code
     frameCounterRef.current += 1;
-    if (frameCounterRef.current % 3 !== 0) return;  // send every 3rd frame only
-    if (isConnected && isSessionStarted) {
+     //if (frameCounterRef.current % 3 !== 0) return;  // send every 3rd frame only
+    console.log('📸 Frame attempt, connected:', isConnectedRef.current, 'started:', isSessionStarted);
+    if (isConnectedRef.current && isSessionStartedRef.current) {
       sendVideoFrame(frameData);
     }
 
   };
 
   const handleAudioChunk = (audioData) => {
-    if (isConnected && isSessionStarted) {
+    console.log('🎤 Audio attempt, connected:', isConnectedRef.current, 'started:', isSessionStarted)
+    if (isConnectedRef.current && isSessionStartedRef.current) {
       const currentTranscript = isSpeechSupported ? getFullTranscript() : null;
       sendAudioChunk(audioData, currentTranscript);
     }
@@ -631,7 +645,7 @@ const InterviewSession = ({ sessionId }) => {
 
         {/* Live warnings overlay */}
         {liveWarnings.length > 0 && (
-          <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-45 space-y-1">
+          <div className="fixed bottom-40 left-1/2 transform -translate-x-1/2 z-50 space-y-1">
             {liveWarnings.map((warning, i) => (
               <div key={i} className="bg-yellow-500/90 text-black text-sm font-semibold px-4 py-2 rounded-lg shadow-lg text-center">
                 ⚠️ {warning}
@@ -653,10 +667,11 @@ const InterviewSession = ({ sessionId }) => {
             {' '}{liveAnalytics.emotion}
           </div>
         </div>
+        
 
         {/* Answer feedback toast */}
         {answerFeedback && (
-          <div className="absolute top-24 right-4 z-50 bg-black/80 text-white rounded-lg p-4 shadow-xl w-72">
+          <div className="absolute top-48 right-4 z-50 bg-black/80 text-white rounded-lg p-4 shadow-xl w-72">
             <div className="flex items-center justify-between mb-2">
               <span className="font-bold text-lg">Answer Score</span>
               <span className={`text-2xl font-bold ${answerFeedback.score >= 70 ? 'text-green-400' : answerFeedback.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -753,7 +768,7 @@ const InterviewSession = ({ sessionId }) => {
 
       {/* Live analytics overlay (eye contact, engagement, audio metrics) */}
       {(liveAnalytics.video || liveAnalytics.audio) && (
-        <div className="fixed bottom-6 left-6 z-40">
+        <div className="fixed top-20 right-4 z-40">
           <div className="bg-black/70 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-2xl text-xs min-w-[220px]">
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold">Live Analysis</span>
