@@ -43,7 +43,7 @@ class LLMService:
         job_description: str,
         resume_text:     Optional[str] = None,
         position:        str = None,
-        num_questions:   int = 15,
+        num_questions:   int = 5,
     ) -> List[Dict[str, str]]:
         """
         Generate interview questions from job description + resume.

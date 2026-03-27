@@ -292,12 +292,86 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
             # ── Answer submitted ──────────────────────────────────────────────
             elif message_type == "answer":
                 question_text = message.get("question", "")
-                answer_text   = message.get("answer", "")
+                answer_text   = message.get("answer", "").strip()
                 duration      = message.get("duration", 0)
                 question_type = questions[question_index].get("type", "behavioral") \
                                 if question_index < len(questions) else "behavioral"
 
                 monitor = session_monitors.get(session_id)
+                
+                # ── GUARD: Skip empty answers ──────────────────────────────
+                if not answer_text or len(answer_text) < 3:
+                    print(f"[Warning] Empty/brief answer detected for Q{question_index + 1}")
+                    
+                    # Send low feedback to client
+                    await manager.send_message(session_id, {
+                        "type": "answer_feedback",
+                        "feedback": "Your answer was too brief or empty. Please provide more detail.",
+                        "score": 0,
+                        "pre_score": 0,
+                        "action": "next_question",
+                    })
+                    
+                    # Move to next question
+                    question_index += 1
+                    follow_ups_given = 0
+                    
+                    # Skip LLM evaluation entirely
+                    if question_index < len(questions):
+                        await manager.send_message(session_id, {
+                            "type": "next_question",
+                            "question": questions[question_index]["question"],
+                            "question_number": question_index + 1,
+                            "total_questions": len(questions),
+                        })
+                    else:
+                        # All questions done
+                        await manager.send_message(session_id, {
+                            "type": "all_questions_complete",
+                        })
+                    
+                    continue 
+                
+                # Check 2: Off-topic answer (very few question keywords in answer)
+                question_words = set(question_text.lower().split())
+                answer_words = set(answer_text.lower().split())
+                
+                # Remove common words (a, the, is, etc)
+                common_words = {'a', 'the', 'is', 'are', 'an', 'and', 'or', 'but', 'in', 'at', 'to', 'for', 'of', 'with', 'by'}
+                question_keywords = question_words - common_words
+                answer_keywords = answer_words - common_words
+                
+                # Calculate relevance: how many question keywords appear in answer
+                keyword_overlap = len(question_keywords & answer_keywords)
+                relevance_ratio = keyword_overlap / max(len(question_keywords), 1) if question_keywords else 0
+                
+                if relevance_ratio < 0.15:  # Less than 15% keyword overlap = off-topic
+                    print(f"[Warning] Off-topic answer detected for Q{question_index + 1} (relevance: {relevance_ratio:.2%})")
+                    
+                    await manager.send_message(session_id, {
+                        "type": "answer_feedback",
+                        "feedback": "Your answer seems off-topic. Please directly address the question.",
+                        "score": 5,  # Very low score
+                        "pre_score": 0,
+                        "action": "next_question",
+                    })
+                    
+                    question_index += 1
+                    follow_ups_given = 0
+                    
+                    if question_index < len(questions):
+                        await manager.send_message(session_id, {
+                            "type": "next_question",
+                            "question": questions[question_index]["question"],
+                            "question_number": question_index + 1,
+                            "total_questions": len(questions),
+                        })
+                    else:
+                        await manager.send_message(session_id, {
+                            "type": "all_questions_complete",
+                        })
+                    
+                    continue
 
                 # ── Step 1: Get per-answer snapshot from analyzers ────────────
                 answer_snapshot = monitor.get_answer_snapshot() if monitor else {

@@ -93,6 +93,7 @@ const InterviewSession = ({ sessionId }) => {
   const [liveAnalytics, setLiveAnalytics] = useState({
     video: null,
     audio: null,
+    emotion: 'neutral',
     lastUpdated: null,
   });
 
@@ -214,15 +215,19 @@ const InterviewSession = ({ sessionId }) => {
     };
 
     const handleAnalytics = (message) => {
-      // Server sends: { type: 'analytics', data: { video?, audio?, timestamp } }
       const data = message.data || {};
+      
+      // Extract emotion from video analysis
+      const video = data.video || {};
+      const emotion = video.dominant_emotion || "neutral";
+      
       setLiveAnalytics((prev) => ({
         video: data.video || prev.video,
         audio: data.audio || prev.audio,
+        emotion: emotion,  // ← ADD THIS LINE
         lastUpdated: data.timestamp || new Date().toISOString(),
       }));
 
-      //right now new code
       const warnings = message?.data?.video?.warnings || [];
       if (warnings.length > 0) {
         setLiveWarnings(warnings);
@@ -601,7 +606,7 @@ const InterviewSession = ({ sessionId }) => {
 
         {/* Live warnings overlay */}
         {liveWarnings.length > 0 && (
-          <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-20 space-y-1">
+          <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-45 space-y-1">
             {liveWarnings.map((warning, i) => (
               <div key={i} className="bg-yellow-500/90 text-black text-sm font-semibold px-4 py-2 rounded-lg shadow-lg text-center">
                 ⚠️ {warning}
@@ -609,6 +614,20 @@ const InterviewSession = ({ sessionId }) => {
             ))}
           </div>
         )}
+
+        {/* Emotion Display */}
+        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-45">
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full px-6 py-2 font-bold shadow-lg">
+            {liveAnalytics.emotion === 'happy' && '😊'} 
+            {liveAnalytics.emotion === 'neutral' && '😐'} 
+            {liveAnalytics.emotion === 'sad' && '😢'} 
+            {liveAnalytics.emotion === 'angry' && '😠'} 
+            {liveAnalytics.emotion === 'surprise' && '😮'} 
+            {liveAnalytics.emotion === 'fear' && '😨'} 
+            {liveAnalytics.emotion === 'disgust' && '🤢'} 
+            {' '}{liveAnalytics.emotion}
+          </div>
+        </div>
 
         {/* Answer feedback toast */}
         {answerFeedback && (
