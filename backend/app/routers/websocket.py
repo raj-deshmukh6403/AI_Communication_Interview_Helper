@@ -277,7 +277,9 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                 await manager.send_message(session_id, {
                     "type": "analytics",
                     "data": {
+                        "video":     analysis["video_analysis"],
                         "audio":     analysis["audio_analysis"],
+                        #"warnings":  analysis.get("warnings", []),
                         "timestamp": analysis["timestamp"],
                     },
                 })
@@ -377,6 +379,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                 answer_snapshot = monitor.get_answer_snapshot() if monitor else {
                     "video": {}, "audio": {}, "warnings_shown": []
                 }
+                print(f"[DEBUG] answer_snapshot: {answer_snapshot}")  # ← ADD THIS
                 video_snap = answer_snapshot.get("video", {})
                 audio_snap = answer_snapshot.get("audio", {})
 

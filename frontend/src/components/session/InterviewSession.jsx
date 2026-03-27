@@ -220,6 +220,10 @@ const InterviewSession = ({ sessionId }) => {
       // Extract emotion from video analysis
       const video = data.video || {};
       const emotion = video.dominant_emotion || "neutral";
+      console.log('🎭 Video analytics:', JSON.stringify(video));
+
+      console.log('📊 Analytics received:', video);  // ← Check what you get
+      console.log('😊 Emotion:', video.dominant_emotion);  // ← Check emotion
       
       setLiveAnalytics((prev) => ({
         video: data.video || prev.video,
@@ -240,19 +244,40 @@ const InterviewSession = ({ sessionId }) => {
       console.log('✅ Session complete (server):', message);
       setFinalFeedback(message.feedback || null);
 
-      // Stop recording and speech recognition once server declares session complete
-      try { stopRecording(); } catch (e) { console.warn('stopRecording error', e); }
-      try { stopListening(); } catch (e) { console.warn('stopListening error', e); }
+      // Stop recording and speech recognition
+      try { 
+        stopRecording(); 
+        stopListening();  // ← Add this
+        window.speechSynthesis.cancel();
+      } catch (e) { 
+        console.warn('stopRecording/stopListening error', e); 
+      }
+      
+      // Stop all video/audio tracks
+      try {
+        if (videoRef.current && videoRef.current.srcObject) {
+          videoRef.current.srcObject.getTracks().forEach(track => {
+            track.stop();
+          });
+          videoRef.current.srcObject = null;
+        }
+        toggleCamera(false);  // ← Disable camera
+        toggleMicrophone(false);  // ← Disable mic
+      } catch (e) {
+        console.warn('Error disabling media:', e);
+      }
 
-      // Clear any timers
+      // Clear timers
       if (videoFrameIntervalRef.current) clearInterval(videoFrameIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
 
-      // Clear ending flag and mark session complete
+      // Properly disconnect WebSocket
+      disconnect();  // ← Make sure this calls isIntentionallyClosed = true
+
       setIsEnding(false);
       setIsSessionComplete(true);
-    };
+};
 
     //right now new code
     const handleAnswerFeedback = (message) => {

@@ -309,7 +309,18 @@ class WebSocketService {
         return 'UNKNOWN';
     }
   }
+
+    disconnect() {
+    console.log('Intentionally closing WebSocket');
+    this.isIntentionallyClosed = true;  // ← CRITICAL
+    this.stopHeartbeat();
+    if (this.ws) {
+      this.ws.close();
+    }
+  }
 }
+
+
 
 // Create singleton instance
 const websocketService = new WebSocketService();
