@@ -346,7 +346,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                     if question_index < len(questions):
                         await manager.send_message(session_id, {
                             "type": "next_question",
-                            "question": questions[question_index]["question"],
+                            "question": questions[question_index],
                             "question_number": question_index + 1,
                             "total_questions": len(questions),
                         })
@@ -388,7 +388,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                     if question_index < len(questions):
                         await manager.send_message(session_id, {
                             "type": "next_question",
-                            "question": questions[question_index]["question"],
+                            "question": questions[question_index],
                             "question_number": question_index + 1,
                             "total_questions": len(questions),
                         })
@@ -480,19 +480,6 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
 
                 # ── Step 7: Reset per-answer state (NOT full session reset) ───
                 if monitor:
-                    # Skip empty answers (skipped questions)
-                    if not answer_text or len(answer_text.strip()) < 3:
-                        question_index += 1
-                        follow_ups_given = 0
-                        if question_index < len(questions):
-                            await manager.send_message(session_id, {
-                                "type": "next_question",
-                                "question": questions[question_index],
-                                "question_number": question_index + 1,
-                                "total_questions": len(questions),
-                                "is_follow_up": False,
-                            })
-                        continue
                     monitor.reset_answer()
 
                 # ── Step 8: Act on decision ───────────────────────────────────
